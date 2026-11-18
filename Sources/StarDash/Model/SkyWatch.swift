@@ -125,6 +125,13 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
         var errorDescription: String? { "Location access is off for StarDash. Allow it in System Settings, Privacy & Security, Location Services." }
     }
 
+    /// macOS locates a Mac from the Wi-Fi networks around it, so a wired Mac with Wi-Fi off often can't.
+    struct NoFix: LocalizedError {
+        var errorDescription: String? { "macOS couldn't work out where this Mac is. Turning Wi-Fi on helps, even if you're on Ethernet." }
+    }
+
+    private var timeout: Task<Void, Never>?
+
     func find(_ completion: @escaping (Result<CLLocationCoordinate2D, Error>) -> Void) {
         done = completion
         manager.delegate = self
@@ -132,11 +139,25 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
         switch manager.authorizationStatus {
         case .denied, .restricted: finish(.failure(Refused()))
         case .notDetermined: manager.requestWhenInUseAuthorization()
-        default: manager.requestLocation()
+        default: start()
+        }
+    }
+
+    /// Keeps listening rather than asking once: the first answer is often "unknown" while macOS is still looking.
+    private func start() {
+        manager.startUpdatingLocation()
+        timeout?.cancel()
+        timeout = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            self?.finish(.failure(NoFix()))
         }
     }
 
     private func finish(_ result: Result<CLLocationCoordinate2D, Error>) {
+        manager.stopUpdatingLocation()
+        timeout?.cancel()
+        timeout = nil
         done?(result)
         done = nil
     }
@@ -148,7 +169,7 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
             switch status {
             case .denied, .restricted: self.finish(.failure(Refused()))
             case .notDetermined: break
-            default: self.manager.requestLocation()
+            default: self.start()
             }
         }
     }
@@ -159,6 +180,13 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        Task { @MainActor in self.finish(.failure(error)) }
+        let code = (error as? CLError)?.code
+        Task { @MainActor in
+            switch code {
+            case .locationUnknown: break // Still looking. The timeout decides when to give up.
+            case .denied: self.finish(.failure(Refused()))
+            default: self.finish(.failure(NoFix()))
+            }
+        }
     }
 }

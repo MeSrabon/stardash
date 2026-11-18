@@ -52,6 +52,7 @@ struct SkyPane: View {
     @State private var frame: Int?
     @State private var playing = false
     @State private var locationNote: String?
+    @State private var locating = false
     static var stagedFrame: Int?
 
     var body: some View {
@@ -148,16 +149,19 @@ struct SkyPane: View {
                     .font(.system(size: 12)).foregroundStyle(locationNote == nil ? .white.opacity(0.55) : Palette.warn)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 330, alignment: .leading)
-                Button("Use this Mac's location") {
+                Button(locating ? "Finding this Mac…" : "Use this Mac's location") {
                     locationNote = nil
+                    locating = true
                     MacLocation.shared.find { result in
+                        locating = false
                         switch result {
                         case .success(let c): Settings.shared.setSite(latitude: c.latitude, longitude: c.longitude)
-                        case .failure(let error): locationNote = error.localizedDescription + " You can also type it in under Settings."
+                        case .failure(let error): locationNote = error.localizedDescription + " Or type the dish's rough location in Settings."
                         }
                     }
                 }
                 .buttonStyle(QuietButton())
+                .disabled(locating)
             }
             .padding(.top, 6)
         } else if watch.satellites.isEmpty {
