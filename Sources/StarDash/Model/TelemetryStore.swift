@@ -206,7 +206,9 @@ final class TelemetryStore {
         do {
             let response = try await dishClient.call(1004)
             guard let body = response.message(2004) else { throw TelemetryError.malformed }
-            dish = DishStatus(body)
+            var status = DishStatus(body)
+            if Demo.on { Demo.scrub(&status) }
+            dish = status
             dishError = nil
             failures = 0
             lastDishUpdate = Date()
@@ -277,7 +279,8 @@ final class TelemetryStore {
         do {
             let response = try await client.call(1004)
             guard let body = response.message(3004) else { throw TelemetryError.malformed }
-            let status = RouterStatus(body)
+            var status = RouterStatus(body)
+            if Demo.on { Demo.scrub(&status) }
             router = status
             routerError = nil
             track(status.clients)
@@ -322,6 +325,7 @@ final class TelemetryStore {
     }
 
     func save() {
+        guard !Demo.on else { return }
         lastSave = Date()
         let snapshot = samples
         let stored = events.map {

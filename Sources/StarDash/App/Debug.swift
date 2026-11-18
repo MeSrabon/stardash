@@ -657,3 +657,29 @@ enum Driver {
         }
     }
 }
+
+/// `--demo` swaps out everything that identifies the owner (country, Wi-Fi name, device names,
+/// addresses, location) for stand-ins, so the app can be screenshotted for the README.
+/// Nothing is saved while it's on, so the stand-ins never reach the real history.
+enum Demo {
+    static let on = CommandLine.arguments.contains("--demo")
+    static let site = GeoPoint(latitude: 47.6, longitude: -122.3)
+    private static let names = ["MacBook Pro", "iPhone", "iPad", "Living room TV", "Pixel 9", "Work laptop", "HomePod"]
+
+    static func scrub(_ dish: inout DishStatus) {
+        dish.countryCode = "US"
+    }
+
+    static func scrub(_ router: inout RouterStatus) {
+        router.ssids = router.ssids.map { (ssid: "Starlink", band: $0.band) }
+        var n = 0
+        router.clients = router.clients.map { c in
+            var c = c
+            guard !c.isInfrastructure else { return c }
+            c.name = names[n % names.count]
+            c.ip = "192.168.1.\(20 + n)"
+            n += 1
+            return c
+        }
+    }
+}

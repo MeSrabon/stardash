@@ -99,6 +99,7 @@ final class SkyWatch {
 extension TelemetryStore {
     /// Where the dish is: its own fix when it shares one, otherwise what was set in Settings.
     var site: GeoPoint? {
+        if Demo.on { return Demo.site }
         if let dishLocation { return dishLocation }
         let s = Settings.shared
         return s.hasSite ? GeoPoint(latitude: s.siteLatitude, longitude: s.siteLongitude) : nil
