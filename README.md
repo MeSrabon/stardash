@@ -33,7 +33,8 @@ macOS 14 or later, on the same network as a Starlink dish. The default addresses
 ## Install
 
 Download the latest `.dmg` from [Releases](../../releases), open it and drag StarDash to Applications.
-Releases are signed and notarized.
+If macOS says it can't verify the developer, open System Settings › Privacy & Security and click
+Open Anyway. Signed and notarized builds are on the way.
 
 ## Build from source
 
