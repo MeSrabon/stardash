@@ -3,6 +3,8 @@
 A native macOS monitor for Starlink. It lives in the menu bar and talks to your dish and router
 over the local network, so nothing leaves your Mac and no Starlink account is needed.
 
+![Dashboard](docs/screenshots/dashboard.png)
+
 ## What it shows
 
 - Live throughput, latency, packet loss and power draw in the menu bar, with a one-screen popover.
@@ -12,6 +14,16 @@ over the local network, so nothing leaves your Mac and no Starlink account is ne
 - Every device on the Wi-Fi with its vendor, signal and traffic, plus mesh nodes.
 - Speed tests from the Mac and from the router, with packet loss.
 - Dish settings: snow melt, sleep schedule, update time, obstruction map reset, stow and reboot.
+
+## Screenshots
+
+| Sky | Speed |
+| --- | --- |
+| ![Sky with the 3D dome and satellites overhead](docs/screenshots/sky.png) | ![Speed test](docs/screenshots/speed.png) |
+| **Network** | **Events** |
+| ![Network devices and latency](docs/screenshots/network.png) | ![Outages and events](docs/screenshots/events.png) |
+| **Device** | |
+| ![Dish health and controls](docs/screenshots/device.png) | |
 
 ## Requirements
 
@@ -34,6 +46,9 @@ open dist/StarDash.app
 ```
 
 `swift build` alone builds the binary without the app bundle.
+
+To retake the screenshots without your own details in them (country, Wi-Fi name, device names,
+location), launch with `--demo`. Nothing is saved while it's on.
 
 ## Contributing
 
