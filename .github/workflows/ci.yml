@@ -1,0 +1,29 @@
+name: CI
+
+# Builds every pull request and every push to main. Pull requests from first-time and
+# outside contributors wait for a maintainer's approval before this runs (repo setting:
+# Actions > General > "Require approval for all external contributors").
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build
+        run: swift build -c release
+      - name: Bundle
+        run: ./scripts/bundle.sh
