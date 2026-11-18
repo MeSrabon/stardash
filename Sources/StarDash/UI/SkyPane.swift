@@ -145,7 +145,7 @@ struct SkyPane: View {
             EmptyView()
         } else if !hasSite {
             VStack(alignment: .leading, spacing: 8) {
-                Text(locationNote ?? "To show the satellites overhead, StarDash needs to know roughly where the dish is.")
+                Text(locationNote ?? "To show the satellites overhead, StarDash needs to know roughly where the dish is. Use this Mac's location, type it in Settings, or let the dish share its own GPS: in the Starlink app, allow location access on the local network under advanced settings.")
                     .font(.system(size: 12)).foregroundStyle(locationNote == nil ? .white.opacity(0.55) : Palette.warn)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: 330, alignment: .leading)

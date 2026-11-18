@@ -349,6 +349,10 @@ struct DashboardPane: View {
                     .monospacedDigit()
                 if inRange > 0 {
                     Text(mapped).font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.4)).lineLimit(1)
+                } else if wanted, store.site == nil {
+                    // Without a location there's no way to tell which satellites are overhead. The Sky page explains how.
+                    Text("Set a location to see satellites ›").font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Palette.warn).lineLimit(1)
                 }
             }
         }
