@@ -1,4 +1,5 @@
 import CoreLocation
+import CoreWLAN
 import Foundation
 import Observation
 
@@ -127,13 +128,28 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
 
     /// macOS locates a Mac from the Wi-Fi networks around it, so a wired Mac with Wi-Fi off often can't.
     struct NoFix: LocalizedError {
-        var errorDescription: String? { "macOS couldn't work out where this Mac is. Turning Wi-Fi on helps, even if you're on Ethernet." }
+        /// Core Location's error code, or nil when it simply never answered.
+        var code: Int?
+        var errorDescription: String? {
+            "macOS couldn't work out where this Mac is (\(code.map { "error \($0)" } ?? "no answer in 20 seconds")). Turning Wi-Fi on helps, even if you're on Ethernet."
+        }
+    }
+
+    /// The usual reason for NoFix, caught before asking so the message can say exactly what to do.
+    struct WiFiOff: LocalizedError {
+        var errorDescription: String? { "Wi-Fi is off on this Mac. macOS finds a Mac's location from the Wi-Fi networks around it, so switch Wi-Fi on (it doesn't need to join one) and try again." }
     }
 
     private var timeout: Task<Void, Never>?
 
     func find(_ completion: @escaping (Result<CLLocationCoordinate2D, Error>) -> Void) {
+        NSLog("StarDash location: asked, services on: \(CLLocationManager.locationServicesEnabled()), authorization: \(manager.authorizationStatus.rawValue)")
         done = completion
+        if let wifi = CWWiFiClient.shared().interface(), !wifi.powerOn() {
+            NSLog("StarDash location: Wi-Fi is off")
+            finish(.failure(WiFiOff()))
+            return
+        }
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyKilometer
         switch manager.authorizationStatus {
@@ -150,6 +166,7 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
         timeout = Task { [weak self] in
             try? await Task.sleep(for: .seconds(20))
             guard !Task.isCancelled else { return }
+            NSLog("StarDash location: no fix after 20 seconds")
             self?.finish(.failure(NoFix()))
         }
     }
@@ -164,6 +181,7 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
+        NSLog("StarDash location: authorization changed to \(status.rawValue)")
         Task { @MainActor in
             guard self.done != nil else { return }
             switch status {
@@ -176,16 +194,19 @@ final class MacLocation: NSObject, CLLocationManagerDelegate {
 
     nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let coordinate = locations.last?.coordinate else { return }
+        NSLog("StarDash location: got a fix, accuracy \(Int(locations.last?.horizontalAccuracy ?? -1)) m")
         Task { @MainActor in self.finish(.success(coordinate)) }
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         let code = (error as? CLError)?.code
+        let raw = (error as NSError).code
+        NSLog("StarDash location: failed, \((error as NSError).domain) \(raw)")
         Task { @MainActor in
             switch code {
             case .locationUnknown: break // Still looking. The timeout decides when to give up.
             case .denied: self.finish(.failure(Refused()))
-            default: self.finish(.failure(NoFix()))
+            default: self.finish(.failure(NoFix(code: raw)))
             }
         }
     }
