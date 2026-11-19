@@ -480,8 +480,6 @@ final class DomeScene {
     private var satellitePool: [SCNNode] = []
     private let tails = SCNNode()
     private let link = SCNNode()
-    private let pulse = SCNNode()
-    private var linkEnd: simd_float3?
     private var shown: [VisibleSatellite] = []
     private var bestID: Int?
     private var hoveredID: Int?
@@ -519,23 +517,33 @@ final class DomeScene {
         turntable.addChildNode(satellites)
         turntable.addChildNode(tails)
         buildHalo()
-        turntable.addChildNode(link)
+        buildBeam()
+    }
 
-        // A bead that runs up the dashed line, so it reads as a live link and not a ruler.
-        let bead = SCNSphere(radius: 0.012)
-        bead.segmentCount = 10
-        bead.firstMaterial = SceneKitHelpers.glow(NSColor(Palette.link))
-        pulse.geometry = bead
-        pulse.isHidden = true
-        pulse.renderingOrder = 23
-        turntable.addChildNode(pulse)
-        let from = simd_float3(0, 0.1, 0)
-        pulse.runAction(.repeatForever(.customAction(duration: 1.3) { [weak self] node, elapsed in
-            guard let end = self?.linkEnd else { return }
-            let f = Float(elapsed / 1.3)
-            node.simdPosition = from + (end - from) * f
-            node.opacity = CGFloat(sin(f * .pi))
-        }))
+    /// A glowing beam from the dish to the satellite it's most likely talking to: a bright core in a soft halo.
+    private func buildBeam() {
+        let tube = SCNCylinder(radius: 0.016, height: 1)
+        tube.radialSegmentCount = 32
+        let rgb = (NSColor(Palette.link).usingColorSpace(.sRGB) ?? .white)
+        let material = SceneKitHelpers.glow(.white)
+        material.readsFromDepthBuffer = false
+        // Brightest where the tube faces the camera, so from any angle it reads as a line of light.
+        material.shaderModifiers = [.fragment: """
+        float f = abs(dot(normalize(_surface.view), normalize(_surface.normal)));
+        float core = pow(f, 24.0);
+        float glow = pow(f, 3.0) * 0.4;
+        float t = _surface.diffuseTexcoord.y;
+        float ends = smoothstep(0.0, 0.06, 1.0 - t) * (0.55 + 0.45 * smoothstep(0.0, 0.5, 1.0 - t));
+        vec3 tint = mix(vec3(\(rgb.redComponent), \(rgb.greenComponent), \(rgb.blueComponent)), vec3(1.0), core);
+        float a = clamp(core + glow, 0.0, 1.0) * ends;
+        _output.color = vec4(tint * a, a);
+        """]
+        tube.firstMaterial = material
+        link.geometry = tube
+        link.renderingOrder = 21
+        link.isHidden = true
+        link.runAction(.repeatForever(.sequence([.fadeOpacity(to: 0.8, duration: 1.4), .fadeOpacity(to: 1, duration: 1.4)])))
+        turntable.addChildNode(link)
     }
 
     /// A soft glow that breathes behind the linked satellite.
@@ -660,26 +668,13 @@ final class DomeScene {
     }
 
     private func applyLink(_ best: (simd_float3, String)?) {
-        linkEnd = best?.0
-        pulse.isHidden = best == nil
-        // A dashed line from the dish to the satellite it's most likely talking to.
-        if let best {
-            let from = simd_float3(0, 0.1, 0)
-            let dashes = 22
-            var points: [SCNVector3] = []
-            for i in 0..<dashes {
-                let a = Float(i) / Float(dashes), b = (Float(i) + 0.55) / Float(dashes)
-                points.append(SCNVector3(from + (best.0 - from) * a))
-                points.append(SCNVector3(from + (best.0 - from) * b))
-            }
-            let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: points)],
-                                       elements: [SCNGeometryElement(indices: (0..<Int32(points.count)).map { $0 }, primitiveType: .line)])
-            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(Palette.link).withAlphaComponent(0.45))
-            link.geometry = geometry
-            link.renderingOrder = 21
-        } else {
-            link.geometry = nil
-        }
+        guard let best else { link.isHidden = true; return }
+        let from = simd_float3(0, 0.1, 0)
+        let span = best.0 - from
+        link.isHidden = false
+        link.simdPosition = from + span / 2
+        link.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize(span))
+        link.simdScale = [1, simd_length(span), 1]
     }
 
     private func buildGround() {
