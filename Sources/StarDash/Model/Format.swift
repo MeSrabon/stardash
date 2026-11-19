@@ -68,6 +68,13 @@ enum Fmt {
         return f
     }()
 
+    /// Safe in a file name: "2026-11-19 0412".
+    static let fileStamp: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HHmm"
+        return f
+    }()
+
     static let dayClock: DateFormatter = {
         let f = DateFormatter()
         f.doesRelativeDateFormatting = true

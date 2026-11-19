@@ -104,6 +104,18 @@ struct DevicePane: View {
                     NSPasteboard.general.setString(text, forType: .string)
                     note = "Copied to the clipboard."
                 }
+                ActionTile(icon: "square.and.arrow.down", title: "Export debug data", detail: "Everything StarDash reads, as a file", tint: Palette.up) {
+                    let panel = NSSavePanel()
+                    panel.nameFieldStringValue = "StarDash debug \(Fmt.fileStamp.string(from: Date())).json"
+                    panel.allowedContentTypes = [.json]
+                    guard panel.runModal() == .OK, let url = panel.url else { return }
+                    do {
+                        try DebugExport.data(store).write(to: url, options: .atomic)
+                        note = "Saved \(url.lastPathComponent)."
+                    } catch {
+                        note = "Couldn't save the file: \(error.localizedDescription)"
+                    }
+                }
             }
             if let note {
                 Text(note).font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.55)).padding(.leading, 4)

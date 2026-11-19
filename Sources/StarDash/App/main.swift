@@ -26,6 +26,21 @@ if let i = arguments.firstIndex(of: "--icon"), i + 1 < arguments.count {
         exit(0)
     }
     RunLoop.main.run()
+} else if let i = arguments.firstIndex(of: "--export-debug"), i + 1 < arguments.count {
+    // Writes the same file as Device › Export debug data, without the UI.
+    Task { @MainActor in
+        let store = TelemetryStore()
+        store.popoverOpen = true
+        try? await Task.sleep(for: .seconds(6))
+        do {
+            try DebugExport.data(store).write(to: URL(fileURLWithPath: arguments[i + 1]), options: .atomic)
+            print("wrote \(arguments[i + 1])")
+        } catch {
+            print("export failed: \(error)")
+        }
+        exit(0)
+    }
+    RunLoop.main.run()
 } else if let i = arguments.firstIndex(of: "--snapshot"), i + 1 < arguments.count {
     // Renders every tab to PNG with live data. Used to check the UI without screen recording access.
     let app = NSApplication.shared
