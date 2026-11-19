@@ -522,7 +522,7 @@ final class DomeScene {
 
     /// A glowing beam from the dish to the satellite it's most likely talking to: a bright core in a soft halo.
     private func buildBeam() {
-        let tube = SCNCylinder(radius: 0.016, height: 1)
+        let tube = SCNCylinder(radius: 0.011, height: 1)
         tube.radialSegmentCount = 32
         let rgb = (NSColor(Palette.link).usingColorSpace(.sRGB) ?? .white)
         let material = SceneKitHelpers.glow(.white)
@@ -530,8 +530,8 @@ final class DomeScene {
         // Brightest where the tube faces the camera, so from any angle it reads as a line of light.
         material.shaderModifiers = [.fragment: """
         float f = abs(dot(normalize(_surface.view), normalize(_surface.normal)));
-        float core = pow(f, 24.0);
-        float glow = pow(f, 3.0) * 0.4;
+        float core = pow(f, 22.0);
+        float glow = pow(f, 4.0) * 0.28;
         float t = _surface.diffuseTexcoord.y;
         float ends = smoothstep(0.0, 0.06, 1.0 - t) * (0.55 + 0.45 * smoothstep(0.0, 0.5, 1.0 - t));
         vec3 tint = mix(vec3(\(rgb.redComponent), \(rgb.greenComponent), \(rgb.blueComponent)), vec3(1.0), core);
@@ -559,7 +559,7 @@ final class DomeScene {
             ring.stroke()
             return true
         }
-        let plane = SCNPlane(width: 0.16, height: 0.16)
+        let plane = SCNPlane(width: 0.1, height: 0.1)
         let material = SceneKitHelpers.glow(.white)
         material.diffuse.contents = image
         material.readsFromDepthBuffer = false
