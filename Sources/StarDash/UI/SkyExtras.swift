@@ -1,4 +1,38 @@
+import AppKit
 import SwiftUI
+
+/// A satellite drawn as a little craft: a square body with a solar wing either side.
+enum SatelliteGlyph {
+    /// The glyph `width` wide, centred on `center`, wings along `angle` (radians, 0 = wings left and right).
+    static func path(at center: CGPoint, width: CGFloat, angle: CGFloat = 0) -> Path {
+        var unit = Path()
+        unit.addRoundedRect(in: CGRect(x: -0.16, y: -0.16, width: 0.32, height: 0.32), cornerSize: CGSize(width: 0.07, height: 0.07))
+        for side: CGFloat in [-1, 1] {
+            unit.addRect(CGRect(x: side < 0 ? -0.23 : 0.13, y: -0.04, width: 0.10, height: 0.08))
+            unit.addRoundedRect(in: CGRect(x: side < 0 ? -0.5 : 0.23, y: -0.19, width: 0.27, height: 0.38),
+                                cornerSize: CGSize(width: 0.04, height: 0.04))
+        }
+        let transform = CGAffineTransform(translationX: center.x, y: center.y).rotated(by: angle).scaledBy(x: width, y: width)
+        return unit.applying(transform)
+    }
+
+    /// A square image of the glyph, for textures in the 3D views.
+    static func image(color: NSColor, side: CGFloat = 96) -> NSImage {
+        NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
+            guard let cg = NSGraphicsContext.current?.cgContext else { return false }
+            let shape = path(at: CGPoint(x: side / 2, y: side / 2), width: side * 0.86).cgPath
+            cg.addPath(shape)
+            cg.setStrokeColor(NSColor(white: 0, alpha: 0.7).cgColor)
+            cg.setLineWidth(side * 0.07)
+            cg.setLineJoin(.round)
+            cg.strokePath()
+            cg.addPath(shape)
+            cg.setFillColor(color.cgColor)
+            cg.fillPath()
+            return true
+        }
+    }
+}
 
 /// Live satellites to draw on top of a sky view.
 struct SkyOverlay {
@@ -7,47 +41,65 @@ struct SkyOverlay {
     /// The satellite to single out.
     var best: Int?
 
-    /// Draws each satellite as a dot with a short tail pointing the way it's travelling.
+    /// Draws each satellite as a small craft turned across its path, with a fading trail behind it.
     /// `project` turns a direction into a point on the view, or nil when it's off the chart.
     func draw(in context: inout GraphicsContext, compact: Bool, width: CGFloat = .infinity, project: (Double, Double) -> CGPoint?) {
-        var highlight: (CGPoint, String)?
+        var highlight: (CGPoint, CGFloat, String)?
         for sat in satellites {
             guard let p = project(sat.azimuth, sat.elevation) else { continue }
             let inRange = sat.elevation >= SkyWatch.serviceElevation
             // The small dashboard chart only has room for the satellites that could be serving.
             if compact, !inRange { continue }
             let ink = Color.white.opacity(inRange ? 1 : 0.4)
+            var heading: CGFloat = -.pi / 4
             if let next = ahead[sat.id], let q = project(next.azimuth, next.elevation) {
                 let dx = q.x - p.x, dy = q.y - p.y
                 let length = (dx * dx + dy * dy).squareRoot()
                 // A long jump means the track wrapped around the edge of an unrolled view.
                 if length > 0.5, length < 80 {
-                    var tail = Path()
-                    tail.move(to: p)
-                    let reach: CGFloat = compact ? 6 : 9
-                    tail.addLine(to: CGPoint(x: p.x + dx / length * reach, y: p.y + dy / length * reach))
-                    context.stroke(tail, with: .color(ink.opacity(0.6)), lineWidth: 1)
+                    heading = atan2(dy, dx)
+                    let reach: CGFloat = compact ? 7 : 14
+                    let end = CGPoint(x: p.x - dx / length * reach, y: p.y - dy / length * reach)
+                    var trail = Path()
+                    trail.move(to: end)
+                    trail.addLine(to: p)
+                    context.stroke(trail, with: .linearGradient(Gradient(colors: [ink.opacity(0), ink.opacity(0.5)]), startPoint: end, endPoint: p),
+                                   style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
                 }
             }
-            let size: CGFloat = compact ? 3.5 : inRange ? 5 : 3.5
-            let dot = Path(ellipseIn: CGRect(x: p.x - size / 2, y: p.y - size / 2, width: size, height: size))
-            context.stroke(dot, with: .color(.black.opacity(0.7)), lineWidth: 2)
-            context.fill(dot, with: .color(ink))
-            if sat.id == best { highlight = (p, sat.name) }
+            if sat.id == best {
+                highlight = (p, heading, sat.name)
+                continue
+            }
+            let size: CGFloat = compact ? 9 : inRange ? 14 : 10
+            let craft = SatelliteGlyph.path(at: p, width: size, angle: heading + .pi / 2)
+            context.stroke(craft, with: .color(.black.opacity(0.7)), style: StrokeStyle(lineWidth: 2, lineJoin: .round))
+            context.fill(craft, with: .color(ink))
         }
-        if let (p, name) = highlight {
-            let ring: CGFloat = compact ? 6 : 8
-            context.stroke(Path(ellipseIn: CGRect(x: p.x - ring, y: p.y - ring, width: ring * 2, height: ring * 2)), with: .color(.white), lineWidth: 1.5)
-            let label = Text(name).font(.system(size: compact ? 8.5 : 10, weight: .semibold)).foregroundColor(.white)
-            let resolved = context.resolve(label)
-            let box = resolved.measure(in: CGSize(width: 200, height: 20))
-            // Sits to the right of the ring, or to the left when it would run off the edge.
-            let fits = p.x + ring + 6 + box.width + 4 <= width
-            let origin = CGPoint(x: fits ? p.x + ring + 6 : p.x - ring - 6 - box.width, y: p.y - box.height / 2)
-            context.fill(Path(roundedRect: CGRect(x: origin.x - 4, y: origin.y - 2, width: box.width + 8, height: box.height + 4), cornerRadius: Theme.r(4)),
-                         with: .color(.black.opacity(0.75)))
-            context.draw(resolved, at: origin, anchor: .topLeading)
-        }
+        guard let (p, heading, name) = highlight else { return }
+
+        // The one the dish is most likely talking to: in its own colour, with a glow and a ring.
+        let glow: CGFloat = compact ? 13 : 22
+        context.fill(Path(ellipseIn: CGRect(x: p.x - glow, y: p.y - glow, width: glow * 2, height: glow * 2)),
+                     with: .radialGradient(Gradient(colors: [Palette.link.opacity(0.5), Palette.link.opacity(0.12), Palette.link.opacity(0)]),
+                                           center: p, startRadius: 0, endRadius: glow))
+        let ring: CGFloat = compact ? 9 : 14
+        context.stroke(Path(ellipseIn: CGRect(x: p.x - ring, y: p.y - ring, width: ring * 2, height: ring * 2)),
+                       with: .color(Palette.link), lineWidth: 1.5)
+        let craft = SatelliteGlyph.path(at: p, width: compact ? 12 : 19, angle: heading + .pi / 2)
+        context.stroke(craft, with: .color(.black.opacity(0.8)), style: StrokeStyle(lineWidth: 2.4, lineJoin: .round))
+        context.fill(craft, with: .color(Palette.link))
+
+        let label = Text(name).font(.system(size: compact ? 8.5 : 10, weight: .semibold)).foregroundColor(.white)
+        let resolved = context.resolve(label)
+        let box = resolved.measure(in: CGSize(width: 200, height: 20))
+        // Sits to the right of the ring, or to the left when it would run off the edge.
+        let fits = p.x + ring + 7 + box.width + 4 <= width
+        let origin = CGPoint(x: fits ? p.x + ring + 7 : p.x - ring - 7 - box.width, y: p.y - box.height / 2)
+        let pill = Path(roundedRect: CGRect(x: origin.x - 5, y: origin.y - 2, width: box.width + 10, height: box.height + 4), cornerRadius: Theme.r(5))
+        context.fill(pill, with: .color(.black.opacity(0.8)))
+        context.stroke(pill, with: .color(Palette.link.opacity(0.6)), lineWidth: 1)
+        context.draw(resolved, at: origin, anchor: .topLeading)
     }
 }
 

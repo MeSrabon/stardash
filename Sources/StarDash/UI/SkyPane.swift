@@ -114,8 +114,10 @@ struct SkyPane: View {
                     HStack(spacing: 16) {
                         legend(Palette.accent, "Clear")
                         legend(Palette.bad, "Obstructed")
-                        legend(Palette.power, style == .dome ? "Ring: where the dish faces" : "Where the dish points")
-                        if live { legend(.white, "Satellite · hover for its name") }
+                        if live {
+                            legend(Palette.link, "Likely connected")
+                            legend(.white, "Satellite · hover for its name")
+                        }
                         Spacer()
                         Text(style.hint).lineLimit(1)
                     }
@@ -329,17 +331,6 @@ struct RadarDots: View {
                 return CGPoint(x: c.x + sin(a) * radius * CGFloat(f), y: c.y - cos(a) * radius * CGFloat(f))
             }
 
-            if let az = alignment?.azimuth, let el = alignment?.elevation {
-                let r = radius * CGFloat(min(1, (90 - el) / maxTheta))
-                let a = az * .pi / 180
-                let p = CGPoint(x: c.x + sin(a) * r, y: c.y - cos(a) * r)
-                var line = Path()
-                line.move(to: c)
-                line.addLine(to: p)
-                context.stroke(line, with: .color(Palette.power.opacity(0.6)), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                context.fill(Path(ellipseIn: CGRect(x: p.x - 9, y: p.y - 9, width: 18, height: 18)), with: .color(Palette.power.opacity(0.25)))
-                context.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)), with: .color(Palette.power))
-            }
             context.fill(Path(ellipseIn: CGRect(x: c.x - 2, y: c.y - 2, width: 4, height: 4)), with: .color(.white.opacity(0.7)))
         }
     }
@@ -454,13 +445,6 @@ private struct HorizonDots: View {
 
             sky.draw(in: &context, compact: false) { azimuth, elevation in
                 elevation >= low ? CGPoint(x: x(azimuth), y: y(elevation)) : nil
-            }
-
-            if var az = alignment?.azimuth, let el = alignment?.elevation {
-                if az < 0 { az += 360 }
-                let p = CGPoint(x: x(az), y: y(max(low, el)))
-                context.fill(Path(ellipseIn: CGRect(x: p.x - 10, y: p.y - 10, width: 20, height: 20)), with: .color(Palette.power.opacity(0.25)))
-                context.fill(Path(ellipseIn: CGRect(x: p.x - 4.5, y: p.y - 4.5, width: 9, height: 9)), with: .color(Palette.power))
             }
         }
     }

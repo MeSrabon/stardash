@@ -9,6 +9,8 @@ enum Palette {
     static var good: Color { mono ? .white : Color(red: 0.24, green: 0.80, blue: 0.52) }
     static var warn: Color { Color(red: 1.0, green: 0.66, blue: 0.20) }
     static var bad: Color { mono ? Color(red: 1.0, green: 0.27, blue: 0.23) : Color(red: 1.0, green: 0.36, blue: 0.36) }
+    /// The satellite the dish is most likely talking to.
+    static var link: Color { mono ? .white : Color(red: 1.0, green: 0.78, blue: 0.28) }
     static var power: Color { mono ? Color(white: 0.8) : Color(red: 1.0, green: 0.78, blue: 0.28) }
 
     static func state(_ s: LinkState) -> Color {

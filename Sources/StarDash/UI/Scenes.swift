@@ -473,7 +473,7 @@ final class DomeScene {
     private let turntable = SCNNode()
     private let domeMaterial = SCNMaterial()
     private let dish = SCNNode()
-    private let beam = SCNNode()
+    private let halo = SCNNode()
     private var maxTheta = 80.0
     private var domeNode: SCNNode?
     private let satellites = SCNNode()
@@ -518,12 +518,13 @@ final class DomeScene {
         rebuildDome()
         turntable.addChildNode(satellites)
         turntable.addChildNode(tails)
+        buildHalo()
         turntable.addChildNode(link)
 
         // A bead that runs up the dashed line, so it reads as a live link and not a ruler.
         let bead = SCNSphere(radius: 0.012)
         bead.segmentCount = 10
-        bead.firstMaterial = SceneKitHelpers.glow(.white)
+        bead.firstMaterial = SceneKitHelpers.glow(NSColor(Palette.link))
         pulse.geometry = bead
         pulse.isHidden = true
         pulse.renderingOrder = 23
@@ -537,14 +538,41 @@ final class DomeScene {
         }))
     }
 
-    /// Puts a bead on the dome for each satellite, with a short line toward where it's heading.
+    /// A soft glow that breathes behind the linked satellite.
+    private func buildHalo() {
+        let side: CGFloat = 128
+        let color = NSColor(Palette.link)
+        let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
+            NSGradient(colors: [color.withAlphaComponent(0.75), color.withAlphaComponent(0.18), color.withAlphaComponent(0)],
+                       atLocations: [0, 0.45, 1], colorSpace: .sRGB)?.draw(in: NSBezierPath(ovalIn: rect), relativeCenterPosition: .zero)
+            let ring = NSBezierPath(ovalIn: rect.insetBy(dx: side * 0.27, dy: side * 0.27))
+            ring.lineWidth = side * 0.025
+            color.withAlphaComponent(0.9).setStroke()
+            ring.stroke()
+            return true
+        }
+        let plane = SCNPlane(width: 0.16, height: 0.16)
+        let material = SceneKitHelpers.glow(.white)
+        material.diffuse.contents = image
+        material.readsFromDepthBuffer = false
+        plane.firstMaterial = material
+        halo.geometry = plane
+        halo.renderingOrder = 19
+        halo.constraints = [SCNBillboardConstraint()]
+        halo.isHidden = true
+        halo.runAction(.repeatForever(.sequence([
+            .group([.scale(to: 1.15, duration: 1.1), .fadeOpacity(to: 0.65, duration: 1.1)]),
+            .group([.scale(to: 0.9, duration: 1.1), .fadeOpacity(to: 1, duration: 1.1)]),
+        ])))
+        turntable.addChildNode(halo)
+    }
+
+    /// Puts a craft on the dome for each satellite, with a short line toward where it's heading.
     func update(sky: SkyOverlay) {
         while satellitePool.count < sky.satellites.count {
-            let bead = SCNSphere(radius: 0.011)
-            bead.segmentCount = 10
-            bead.firstMaterial = SceneKitHelpers.flat(.white)
-            let node = SCNNode(geometry: bead)
+            let node = SCNNode(geometry: Self.craft)
             node.renderingOrder = 20
+            node.constraints = [SCNBillboardConstraint()]
             satellites.addChildNode(node)
             satellitePool.append(node)
         }
@@ -560,15 +588,17 @@ final class DomeScene {
             let p = SceneKitHelpers.skyDirection(azimuth: sat.azimuth, elevation: sat.elevation) * 1.012
             node.isHidden = false
             node.simdPosition = p
-            node.simdScale = simd_float3(repeating: sat.id == sky.best ? 2 : sat.id == hoveredID ? 1.8 : inRange ? 1 : 0.6)
+            node.geometry = sat.id == sky.best ? Self.linkedCraft : Self.craft
+            node.simdScale = simd_float3(repeating: Self.scale(sat, best: sky.best, hovered: hoveredID))
             if sat.id == hoveredID { hoverLabel?.simdPosition = p * 1.12 }
-            node.opacity = inRange ? 1 : 0.45
+            node.opacity = inRange || sat.id == sky.best ? 1 : 0.45
             if let next = sky.ahead[sat.id] {
                 let q = SceneKitHelpers.skyDirection(azimuth: next.azimuth, elevation: next.elevation) * 1.012
                 let step = q - p
                 if simd_length(step) > 0.0005 {
+                    // A short trail behind it, the way it came.
+                    segments.append(SCNVector3(p - simd_normalize(step) * 0.04))
                     segments.append(SCNVector3(p))
-                    segments.append(SCNVector3(p + simd_normalize(step) * 0.035))
                 }
             }
             if sat.id == sky.best { best = (p, sat.name) }
@@ -578,7 +608,7 @@ final class DomeScene {
         } else {
             let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: segments)],
                                        elements: [SCNGeometryElement(indices: (0..<Int32(segments.count)).map { $0 }, primitiveType: .line)])
-            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.55))
+            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.4))
             tails.geometry = geometry
         }
         if best?.1 != bestName {
@@ -587,7 +617,9 @@ final class DomeScene {
             bestLabel.map(turntable.addChildNode)
             bestName = best?.1
         }
-        if let best { bestLabel?.simdPosition = best.0 * 1.12 }
+        if let best { bestLabel?.simdPosition = best.0 * 1.13 }
+        halo.isHidden = best == nil
+        if let best { halo.simdPosition = best.0 }
 
         applyLink(best)
     }
@@ -615,7 +647,7 @@ final class DomeScene {
         for (i, node) in satellitePool.enumerated() where i < shown.count {
             let sat = shown[i]
             let inRange = sat.elevation >= SkyWatch.serviceElevation
-            node.simdScale = simd_float3(repeating: sat.id == bestID ? 2 : sat.id == id ? 1.8 : inRange ? 1 : 0.6)
+            node.simdScale = simd_float3(repeating: Self.scale(sat, best: bestID, hovered: id))
             // The best placed one already carries its name.
             if sat.id == id, sat.id != bestID {
                 let label = SceneKitHelpers.label(String(format: "%@ · %.0f° up", sat.name, sat.elevation), color: .white, size: 0.065)
@@ -642,7 +674,7 @@ final class DomeScene {
             }
             let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: points)],
                                        elements: [SCNGeometryElement(indices: (0..<Int32(points.count)).map { $0 }, primitiveType: .line)])
-            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.8))
+            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(Palette.link).withAlphaComponent(0.45))
             link.geometry = geometry
             link.renderingOrder = 21
         } else {
@@ -701,8 +733,6 @@ final class DomeScene {
         dish.position.y = 0.1
         turntable.addChildNode(dish)
 
-        beam.position.y = 0.1
-        turntable.addChildNode(beam)
     }
 
     /// Hemisphere mesh whose texture coordinates point straight into the dish's polar map image.
@@ -760,34 +790,28 @@ final class DomeScene {
             domeMaterial.diffuse.contents = ObstructionMapView.render(map, dome: true)
         }
 
-        guard let az = alignment?.azimuth, let el = alignment?.elevation else {
-            beam.isHidden = true
-            return
-        }
-        let dir = SceneKitHelpers.skyDirection(azimuth: az, elevation: el)
+        guard let az = alignment?.azimuth, let el = alignment?.elevation else { return }
         // Face normal along the boresight, long edge kept pointing "up the slope".
-        dish.simdOrientation = simd_quatf(from: [0, 1, 0], to: dir)
+        dish.simdOrientation = simd_quatf(from: [0, 1, 0], to: SceneKitHelpers.skyDirection(azimuth: az, elevation: el))
+    }
 
-        beam.isHidden = false
-        beam.childNodes.forEach { $0.removeFromParentNode() }
-        let cone = SCNCone(topRadius: 0.17, bottomRadius: 0.01, height: 0.98)
-        cone.radialSegmentCount = 48
-        cone.firstMaterial = SceneKitHelpers.glow(NSColor(Palette.accent).withAlphaComponent(0.07))
-        let coneNode = SCNNode(geometry: cone)
-        coneNode.simdPosition = dir * 0.49
-        coneNode.simdOrientation = simd_quatf(from: [0, 1, 0], to: dir)
-        beam.addChildNode(coneNode)
+    /// Satellite sprites: one plain, one for the satellite the dish is most likely linked to.
+    private static let craft = sprite(SatelliteGlyph.image(color: .white), side: 0.055)
+    private static let linkedCraft = sprite(SatelliteGlyph.image(color: NSColor(Palette.link)), side: 0.055)
 
-        // A ring where the dish's face is aimed. A ring, not a ball, so it can't be mistaken for a satellite.
-        let ring = SCNTorus(ringRadius: 0.05, pipeRadius: 0.006)
-        ring.ringSegmentCount = 48
-        ring.firstMaterial = SceneKitHelpers.flat(NSColor(Palette.power))
-        ring.firstMaterial?.readsFromDepthBuffer = false
-        let ringNode = SCNNode(geometry: ring)
-        ringNode.renderingOrder = 22
-        ringNode.simdPosition = dir * 1.0
-        ringNode.simdOrientation = simd_quatf(from: [0, 1, 0], to: dir)
-        beam.addChildNode(ringNode)
+    private static func sprite(_ image: NSImage, side: CGFloat) -> SCNPlane {
+        let plane = SCNPlane(width: side, height: side)
+        let material = SceneKitHelpers.flat(.white)
+        material.diffuse.contents = image
+        material.writesToDepthBuffer = false
+        plane.firstMaterial = material
+        return plane
+    }
+
+    private static func scale(_ sat: VisibleSatellite, best: Int?, hovered: Int?) -> Float {
+        if sat.id == best { return 1.6 }
+        if sat.id == hovered { return 1.5 }
+        return sat.elevation >= SkyWatch.serviceElevation ? 1 : 0.7
     }
 }
 
