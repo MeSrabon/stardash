@@ -21,7 +21,7 @@ cp "$BIN" "$APP/Contents/MacOS/StarDash"
 
 ICONSET="$(mktemp -d)/StarDash.iconset"
 mkdir -p "$ICONSET"
-"$BIN" --icon "$ICONSET/base.png"
+"$BIN" --icon "$ICONSET/base.png" docs/icon.svg
 for size in 16 32 128 256 512; do
   sips -z $size $size "$ICONSET/base.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
   sips -z $((size * 2)) $((size * 2)) "$ICONSET/base.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null

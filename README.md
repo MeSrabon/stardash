@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/icon.svg" width="128" alt="StarDash icon"></p>
+
 # StarDash
 
 A native macOS monitor for Starlink. It lives in the menu bar and talks to your dish and router

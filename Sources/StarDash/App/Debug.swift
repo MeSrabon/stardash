@@ -473,34 +473,16 @@ enum Snapshot {
 
 @MainActor
 enum IconMaker {
-    /// Draws the app icon. Run by scripts/bundle.sh, which turns the PNG into an .icns.
-    static func write(to path: String) {
+    /// Renders docs/icon.svg onto the macOS icon grid (an 824 pt tile centred on a 1024 canvas).
+    /// Run by scripts/bundle.sh, which turns the PNG into an .icns.
+    static func write(to path: String, from svg: String) {
+        guard let art = NSImage(contentsOf: URL(fileURLWithPath: svg)) else {
+            FileHandle.standardError.write(Data("can't read \(svg)\n".utf8))
+            exit(1)
+        }
         let side: CGFloat = 1024
         let image = NSImage(size: NSSize(width: side, height: side), flipped: false) { _ in
-            let inset: CGFloat = 100
-            let body = NSRect(x: inset, y: inset, width: side - inset * 2, height: side - inset * 2)
-            let shape = NSBezierPath(roundedRect: body, xRadius: 185, yRadius: 185)
-            NSGradient(colors: [
-                NSColor(red: 0.05, green: 0.08, blue: 0.20, alpha: 1),
-                NSColor(red: 0.10, green: 0.26, blue: 0.56, alpha: 1),
-            ])?.draw(in: shape, angle: 60)
-
-            shape.addClip()
-            // Orbit rings behind the dish glyph.
-            for (radius, alpha) in [(300.0, 0.22), (410.0, 0.14), (520.0, 0.08)] {
-                let ring = NSBezierPath(ovalIn: NSRect(x: 512 - radius, y: 300 - radius, width: radius * 2, height: radius * 2))
-                ring.lineWidth = 10
-                NSColor(white: 1, alpha: alpha).setStroke()
-                ring.stroke()
-            }
-
-            let config = NSImage.SymbolConfiguration(pointSize: 400, weight: .semibold)
-                .applying(.init(paletteColors: [.white]))
-            if let symbol = NSImage(systemSymbolName: "antenna.radiowaves.left.and.right", accessibilityDescription: nil)?
-                .withSymbolConfiguration(config) {
-                let s = symbol.size
-                symbol.draw(in: NSRect(x: (side - s.width) / 2, y: (side - s.height) / 2 + 10, width: s.width, height: s.height))
-            }
+            art.draw(in: NSRect(x: 100, y: 100, width: 824, height: 824))
             return true
         }
         guard let tiff = image.tiffRepresentation, let rep = NSBitmapImageRep(data: tiff),

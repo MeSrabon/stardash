@@ -3,8 +3,8 @@ import SwiftUI
 
 let arguments = CommandLine.arguments
 
-if let i = arguments.firstIndex(of: "--icon"), i + 1 < arguments.count {
-    MainActor.assumeIsolated { IconMaker.write(to: arguments[i + 1]) }
+if let i = arguments.firstIndex(of: "--icon"), i + 2 < arguments.count {
+    MainActor.assumeIsolated { IconMaker.write(to: arguments[i + 1], from: arguments[i + 2]) }
 } else if arguments.contains("--speedtest") {
     Task { @MainActor in
         await SpeedProbe.run()
