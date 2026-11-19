@@ -3,13 +3,23 @@ import Charts
 
 /// Data, power and latency over time. Built from what StarDash records while it runs.
 struct UsagePane: View {
-    enum Section: String { case data, power, latency }
+    enum Section: String { case data, power, latency, billing }
 
     @Environment(TelemetryStore.self) private var store
     @AppStorage("usageSection") private var sectionName = Section.data.rawValue
     @State private var hoursBack = 24
 
-    private var section: Section { Section(rawValue: sectionName) ?? .data }
+    private var section: Section {
+        let picked = Section(rawValue: sectionName) ?? .data
+        // Billing needs the Starlink account. Signed out, the page falls back to StarDash's own data.
+        return picked == .billing && !Account.shared.signedIn ? .data : picked
+    }
+
+    private var sections: [(value: Section, label: String)] {
+        var options: [(value: Section, label: String)] = [(.data, "Data"), (.power, "Power"), (.latency, "Latency")]
+        if Account.shared.signedIn { options.append((.billing, "Billing")) }
+        return options
+    }
 
     private struct Bar: Identifiable {
         var id: Date { date }
@@ -53,20 +63,24 @@ struct UsagePane: View {
             HStack(alignment: .firstTextBaseline) {
                 PaneTitle("Usage")
                 Spacer()
-                ChipPicker(options: [(Section.data, "Data"), (.power, "Power"), (.latency, "Latency")],
+                ChipPicker(options: sections,
                            selection: Binding(get: { section }, set: { sectionName = $0.rawValue }))
             }
-            HStack(alignment: .bottom) {
-                switch section {
-                case .data: dataHero(totals)
-                case .power: powerHero(totals)
-                case .latency: latencyHero
+            if section != .billing {
+                HStack(alignment: .bottom) {
+                    switch section {
+                    case .data: dataHero(totals)
+                    case .power: powerHero(totals)
+                    case .latency, .billing: latencyHero
+                    }
+                    Spacer(minLength: 0)
+                    ChipPicker(options: [(24, "24h"), (168, "7d"), (720, "30d")], selection: $hoursBack)
+                        .padding(.bottom, 4)
                 }
-                Spacer(minLength: 0)
-                ChipPicker(options: [(24, "24h"), (168, "7d"), (720, "30d")], selection: $hoursBack)
-                    .padding(.bottom, 4)
             }
             switch section {
+            case .billing:
+                BillingUsageView()
             case .data:
                 chartPanel("Data over time", unit: "GB", totals) { bar in
                     BarMark(x: .value("Time", bar.date, unit: hoursBack <= 48 ? .hour : .day), y: .value("GB", bar.down / 1e9))

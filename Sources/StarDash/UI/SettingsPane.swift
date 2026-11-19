@@ -18,6 +18,7 @@ struct SettingsPane: View {
                 VStack(spacing: 14) {
                     notifications(settings)
                     general(settings)
+                    StarlinkAccountPanel()
                 }
                 VStack(spacing: 14) {
                     connection(settings)
@@ -289,7 +290,7 @@ private struct Chip: View {
     }
 }
 
-private struct GroupTitle: View {
+struct GroupTitle: View {
     var text: String
     init(_ text: String) { self.text = text }
 
@@ -302,7 +303,7 @@ private struct GroupTitle: View {
     }
 }
 
-private struct SettingRow<Control: View>: View {
+struct SettingRow<Control: View>: View {
     var icon: String
     var tint: Color
     var title: String
