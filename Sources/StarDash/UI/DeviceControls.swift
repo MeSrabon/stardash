@@ -104,6 +104,19 @@ struct DishControls: View {
                 .buttonStyle(QuietButton())
                 .padding(.top, 12)
                 .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Factory reset dish").font(.system(size: 13))
+                        Text("Erases every dish setting and what it has learned. Only worth it as a last resort or when Starlink support asks.")
+                            .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45)).fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 12)
+                    Button { confirmFactoryReset() } label: { Text("Factory reset…").foregroundStyle(Palette.bad) }
+                        .buttonStyle(QuietButton())
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 2)
+                .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.top, 2) }
             }
         }
         .toggleStyle(ThemedSwitch())
@@ -121,6 +134,21 @@ struct DishControls: View {
         }
         .padding(.vertical, 10)
         .overlay(alignment: .top) { Rectangle().fill(.white.opacity(0.07)).frame(height: 1) }
+    }
+
+    private func confirmFactoryReset() {
+        overlays.confirm = ConfirmRequest(
+            title: "Factory reset the dish?",
+            message: "This erases all dish settings, including snow melt, the sleep schedule and the obstruction map. Your internet goes down while it resets. Afterwards the dish has to be set up again with the Starlink app, as if it were new. This can't be undone.",
+            action: "Factory reset",
+            typeToConfirm: "RESET"
+        ) {
+            Task {
+                let result = await store.factoryResetDish()
+                note = result.message
+                noteIsError = !result.ok
+            }
+        }
     }
 
     private func send(_ change: DishChange, done: String) {

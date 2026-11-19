@@ -28,6 +28,8 @@ struct ConfirmRequest {
     var message: String
     var action: String
     var destructive = true
+    /// When set, the action stays off until this word is typed. For changes that can't be undone.
+    var typeToConfirm: String? = nil
     var run: () -> Void
 }
 
@@ -106,6 +108,12 @@ private struct ConfirmLayer: View {
     var request: ConfirmRequest
     var overlays: Overlays
     @State private var shown = false
+    @State private var typed = ""
+
+    private var unlocked: Bool {
+        guard let word = request.typeToConfirm else { return true }
+        return typed.trimmingCharacters(in: .whitespaces) == word
+    }
 
     var body: some View {
         ZStack {
@@ -121,15 +129,32 @@ private struct ConfirmLayer: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.top, 8)
+                if let word = request.typeToConfirm {
+                    Text("Type \(word) to continue.")
+                        .font(.system(size: 11.5))
+                        .foregroundStyle(.white.opacity(0.5))
+                        .padding(.top, 14)
+                    TextField(word, text: $typed)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 13, design: .monospaced))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: Theme.r(8), style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: Theme.r(8), style: .continuous).strokeBorder(.white.opacity(0.18)))
+                        .padding(.top, 6)
+                }
                 HStack(spacing: 10) {
                     Button("Cancel") { close() }
                         .buttonStyle(CardButton(kind: .plain))
                         .keyboardShortcut(.cancelAction)
                     Button(request.action) {
+                        guard unlocked else { return }
                         close()
                         request.run()
                     }
                     .buttonStyle(CardButton(kind: request.destructive ? .danger : .primary))
+                    .disabled(!unlocked)
+                    .opacity(unlocked ? 1 : 0.4)
                 }
                 .padding(.top, 22)
             }

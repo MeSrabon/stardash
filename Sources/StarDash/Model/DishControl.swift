@@ -104,6 +104,22 @@ extension TelemetryStore {
         (try? await dishClient.call(2002, body: stow ? [] : [8, 1])) != nil
     }
 
+    /// Erases the dish back to how it shipped. `DishFactoryResetRequest { app_reset = true }`, the
+    /// dish's own request (it answers the generic factory_reset with Unimplemented). From Dishylink's
+    /// core/dishClient.ts. Returns what happened, worded for the user.
+    func factoryResetDish() async -> (ok: Bool, message: String) {
+        guard dish != nil, dishError == nil else { return (false, "The dish isn't answering, so nothing was sent.") }
+        do {
+            _ = try await dishClient.call(2021, body: [0x08, 0x01], timeout: 8)
+            return (true, "Factory reset sent. The dish is erasing itself and restarting. Set it up again in the Starlink app.")
+        } catch TelemetryError.timeout {
+            // The dish drops off as it resets, which can cut the reply short.
+            return (true, "Factory reset sent. The dish stopped answering, which is expected while it erases itself.")
+        } catch {
+            return (false, "The dish refused: \(error.localizedDescription)")
+        }
+    }
+
     func rebootRouter() async -> Bool {
         (try? await routerClient.call(1001)) != nil
     }
