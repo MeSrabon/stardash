@@ -16,6 +16,23 @@ enum SatelliteGlyph {
         return unit.applying(transform)
     }
 
+    /// The glyph lit like a satellite catching the sun: a bright body and softer wings, with no outline.
+    static func glint(color: NSColor, side: CGFloat = 128) -> NSImage {
+        NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in
+            guard let cg = NSGraphicsContext.current?.cgContext else { return false }
+            let c = CGPoint(x: side / 2, y: side / 2)
+            let w = side * 0.9
+            // Wings first, a touch dimmer, then the body on top.
+            cg.addPath(path(at: c, width: w).cgPath)
+            cg.setFillColor(color.withAlphaComponent(0.7).cgColor)
+            cg.fillPath()
+            cg.addPath(Path(roundedRect: CGRect(x: c.x - w * 0.16, y: c.y - w * 0.16, width: w * 0.32, height: w * 0.32), cornerRadius: w * 0.07).cgPath)
+            cg.setFillColor(color.cgColor)
+            cg.fillPath()
+            return true
+        }
+    }
+
     /// A square image of the glyph, for textures in the 3D views.
     static func image(color: NSColor, side: CGFloat = 96) -> NSImage {
         NSImage(size: NSSize(width: side, height: side), flipped: true) { _ in

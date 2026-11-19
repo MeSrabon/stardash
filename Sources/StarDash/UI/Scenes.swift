@@ -69,7 +69,7 @@ enum SceneKitHelpers {
         view.scene = scene
         view.pointOfView = camera
         view.backgroundColor = .clear
-        view.antialiasingMode = .multisampling2X
+        view.antialiasingMode = .multisampling4X
         view.isPlaying = true
         view.preferredFramesPerSecond = 30
         view.rendersContinuously = false
@@ -476,6 +476,7 @@ final class DomeScene {
     private let halo = SCNNode()
     private var maxTheta = 80.0
     private var domeNode: SCNNode?
+    private var shellNode: SCNNode?
     private let satellites = SCNNode()
     private var satellitePool: [SCNNode] = []
     private let tails = SCNNode()
@@ -498,7 +499,7 @@ final class DomeScene {
 
         let ambient = SCNLight()
         ambient.type = .ambient
-        ambient.intensity = 500
+        ambient.intensity = 260
         let ambientNode = SCNNode()
         ambientNode.light = ambient
         scene.rootNode.addChildNode(ambientNode)
@@ -509,6 +510,15 @@ final class DomeScene {
         keyNode.light = key
         keyNode.eulerAngles = SCNVector3(-1.0, 0.6, 0)
         scene.rootNode.addChildNode(keyNode)
+        // A cool light from behind, so the panel's edges catch a rim.
+        let rim = SCNLight()
+        rim.type = .directional
+        rim.intensity = 600
+        rim.color = NSColor(white: 0.85, alpha: 1)
+        let rimNode = SCNNode()
+        rimNode.light = rim
+        rimNode.eulerAngles = SCNVector3(-0.4, .pi, 0)
+        scene.rootNode.addChildNode(rimNode)
 
         buildGround()
         buildGrid()
@@ -616,7 +626,7 @@ final class DomeScene {
         } else {
             let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: segments)],
                                        elements: [SCNGeometryElement(indices: (0..<Int32(segments.count)).map { $0 }, primitiveType: .line)])
-            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.4))
+            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.28))
             tails.geometry = geometry
         }
         if best?.1 != bestName {
@@ -678,13 +688,28 @@ final class DomeScene {
     }
 
     private func buildGround() {
-        let disc = SCNCylinder(radius: 1, height: 0.004)
-        disc.radialSegmentCount = 96
-        disc.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.045))
-        disc.firstMaterial?.writesToDepthBuffer = false
-        let node = SCNNode(geometry: disc)
-        node.position.y = -0.004
-        turntable.addChildNode(node)
+        // A pool of light on the ground, brightest under the dish and gone by the horizon.
+        let floor = SCNPlane(width: 2.2, height: 2.2)
+        let floorMaterial = SceneKitHelpers.flat(.white)
+        floorMaterial.diffuse.contents = Self.radial(side: 512, stops: [(0, 0.08), (0.2, 0.035), (0.42, 0.01), (0.5, 0)])
+        floorMaterial.writesToDepthBuffer = false
+        floor.firstMaterial = floorMaterial
+        let floorNode = SCNNode(geometry: floor)
+        floorNode.eulerAngles.x = -.pi / 2
+        floorNode.position.y = -0.002
+        floorNode.renderingOrder = -2
+        turntable.addChildNode(floorNode)
+
+        // A soft contact shadow under the dish.
+        let shadow = SCNPlane(width: 0.42, height: 0.42)
+        let shadowMaterial = SceneKitHelpers.flat(.black)
+        shadowMaterial.diffuse.contents = Self.radial(side: 128, stops: [(0, 0.7), (0.22, 0.35), (0.5, 0)], white: 0)
+        shadowMaterial.writesToDepthBuffer = false
+        shadow.firstMaterial = shadowMaterial
+        let shadowNode = SCNNode(geometry: shadow)
+        shadowNode.eulerAngles.x = -.pi / 2
+        shadowNode.renderingOrder = -1
+        turntable.addChildNode(shadowNode)
 
         for (text, az) in [("N", 0.0), ("E", 90.0), ("S", 180.0), ("W", 270.0)] {
             let color = text == "N" ? NSColor(Palette.bad) : NSColor(white: 1, alpha: 0.6)
@@ -695,12 +720,12 @@ final class DomeScene {
     }
 
     private func buildGrid() {
-        let faint = NSColor(white: 1, alpha: 0.13)
+        let faint = NSColor(white: 1, alpha: 0.07)
         for elevation in [0.0, 30.0, 60.0] {
             let ring = stride(from: 0.0, to: 360.0, by: 3).map {
                 SCNVector3(SceneKitHelpers.skyDirection(azimuth: $0, elevation: elevation))
             }
-            turntable.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(ring, color: elevation == 0 ? NSColor(white: 1, alpha: 0.3) : faint, closed: true)))
+            turntable.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(ring, color: elevation == 0 ? NSColor(white: 1, alpha: 0.22) : faint, closed: true)))
         }
         for azimuth in stride(from: 0.0, to: 360.0, by: 45) {
             let arc = stride(from: 0.0, through: 90.0, by: 3).map {
@@ -712,7 +737,7 @@ final class DomeScene {
 
     private func buildDish() {
         let stand = SCNCylinder(radius: 0.012, height: 0.1)
-        stand.firstMaterial?.diffuse.contents = NSColor(white: 0.55, alpha: 1)
+        stand.firstMaterial?.diffuse.contents = NSColor(white: 0.35, alpha: 1)
         let standNode = SCNNode(geometry: stand)
         standNode.position.y = 0.05
         turntable.addChildNode(standNode)
@@ -721,8 +746,9 @@ final class DomeScene {
         let panel = SCNBox(width: 0.2, height: 0.014, length: 0.26, chamferRadius: 0.006)
         let face = SCNMaterial()
         face.lightingModel = .physicallyBased
-        face.diffuse.contents = NSColor(white: 0.92, alpha: 1)
-        face.roughness.contents = 0.45
+        face.diffuse.contents = NSColor(white: 0.86, alpha: 1)
+        face.roughness.contents = 0.4
+        face.metalness.contents = 0.0
         panel.materials = [face]
         dish.geometry = panel
         dish.position.y = 0.1
@@ -756,14 +782,15 @@ final class DomeScene {
             }
         }
         let geometry = SCNGeometry(
-            sources: [SCNGeometrySource(vertices: vertices), SCNGeometrySource(textureCoordinates: uvs)],
+            sources: [SCNGeometrySource(vertices: vertices), SCNGeometrySource(normals: vertices), SCNGeometrySource(textureCoordinates: uvs)],
             elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)]
         )
         domeMaterial.lightingModel = .constant
         domeMaterial.isDoubleSided = true
         domeMaterial.blendMode = .alpha
         domeMaterial.writesToDepthBuffer = false
-        domeMaterial.diffuse.magnificationFilter = .nearest
+        domeMaterial.diffuse.magnificationFilter = .linear
+        domeMaterial.diffuse.mipFilter = .linear
         domeMaterial.diffuse.minificationFilter = .linear
         domeMaterial.diffuse.wrapS = .clampToBorder
         domeMaterial.diffuse.wrapT = .clampToBorder
@@ -774,6 +801,23 @@ final class DomeScene {
         node.renderingOrder = 10
         turntable.addChildNode(node)
         domeNode = node
+
+        // A faint glass edge, so the hemisphere reads as a shape even where nothing is mapped.
+        shellNode?.removeFromParentNode()
+        let glass = geometry.copy() as! SCNGeometry
+        let shell = SceneKitHelpers.glow(.white)
+        shell.readsFromDepthBuffer = false
+        shell.cullMode = .back
+        shell.shaderModifiers = [.fragment: """
+        float edge = 1.0 - abs(dot(normalize(_surface.view), normalize(_surface.normal)));
+        float a = pow(edge, 5.0) * 0.12;
+        _output.color = vec4(vec3(a), a);
+        """]
+        glass.materials = [shell]
+        let shellGeometryNode = SCNNode(geometry: glass)
+        shellGeometryNode.renderingOrder = 9
+        turntable.addChildNode(shellGeometryNode)
+        shellNode = shellGeometryNode
     }
 
     func update(map: ObstructionMap?, alignment: Alignment?) {
@@ -782,7 +826,7 @@ final class DomeScene {
                 maxTheta = map.maxTheta
                 rebuildDome()
             }
-            domeMaterial.diffuse.contents = ObstructionMapView.render(map, dome: true)
+            domeMaterial.diffuse.contents = Self.skyTexture(map)
         }
 
         guard let az = alignment?.azimuth, let el = alignment?.elevation else { return }
@@ -791,16 +835,59 @@ final class DomeScene {
     }
 
     /// Satellite sprites: one plain, one for the satellite the dish is most likely linked to.
-    private static let craft = sprite(SatelliteGlyph.image(color: .white), side: 0.055)
-    private static let linkedCraft = sprite(SatelliteGlyph.image(color: NSColor(Palette.link)), side: 0.055)
+    private static let craft = sprite(SatelliteGlyph.glint(color: NSColor(white: 0.92, alpha: 1)), side: 0.05)
+    private static let linkedCraft = sprite(SatelliteGlyph.glint(color: NSColor(Palette.link)), side: 0.055)
 
     private static func sprite(_ image: NSImage, side: CGFloat) -> SCNPlane {
         let plane = SCNPlane(width: side, height: side)
         let material = SceneKitHelpers.flat(.white)
         material.diffuse.contents = image
+        material.diffuse.mipFilter = .linear
         material.writesToDepthBuffer = false
         plane.firstMaterial = material
         return plane
+    }
+
+    /// The sky map as soft dots on a clear texture: faint where the sky is clear, a red glow where it's blocked.
+    /// Same dotted look as the radar, so the two views read as one instrument.
+    static func skyTexture(_ map: ObstructionMap) -> CGImage? {
+        let cell = 8
+        let w = map.cols * cell, h = map.rows * cell
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        let clear = NSColor(Palette.accent).withAlphaComponent(0.32).cgColor
+        let blocked = NSColor(Palette.bad).cgColor
+        let blockedGlow = NSColor(Palette.bad).withAlphaComponent(0.25).cgColor
+        for row in 0..<map.rows {
+            for col in 0..<map.cols {
+                let v = map.snr[row * map.cols + col]
+                guard v >= 0 else { continue }
+                let cx = CGFloat(col * cell) + CGFloat(cell) / 2
+                let cy = CGFloat((map.rows - 1 - row) * cell) + CGFloat(cell) / 2
+                if v < 0.5 {
+                    ctx.setFillColor(blockedGlow)
+                    ctx.fillEllipse(in: CGRect(x: cx - 4, y: cy - 4, width: 8, height: 8))
+                    ctx.setFillColor(blocked)
+                    ctx.fillEllipse(in: CGRect(x: cx - 2.4, y: cy - 2.4, width: 4.8, height: 4.8))
+                } else {
+                    ctx.setFillColor(clear)
+                    ctx.fillEllipse(in: CGRect(x: cx - 1.8, y: cy - 1.8, width: 3.6, height: 3.6))
+                }
+            }
+        }
+        return ctx.makeImage()
+    }
+
+    /// A round gradient, white (or black) with alpha falling off by the given stops (0 is the centre, 0.5 the edge).
+    static func radial(side: Int, stops: [(CGFloat, CGFloat)], white: CGFloat = 1) -> CGImage? {
+        guard let ctx = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                        colors: stops.map { CGColor(red: white, green: white, blue: white, alpha: $0.1) } as CFArray,
+                                        locations: stops.map { $0.0 * 2 }) else { return nil }
+        let c = CGPoint(x: CGFloat(side) / 2, y: CGFloat(side) / 2)
+        ctx.drawRadialGradient(gradient, startCenter: c, startRadius: 0, endCenter: c, endRadius: CGFloat(side) / 2, options: [])
+        return ctx.makeImage()
     }
 
     private static func scale(_ sat: VisibleSatellite, best: Int?, hovered: Int?) -> Float {
