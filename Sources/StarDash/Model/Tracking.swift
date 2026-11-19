@@ -249,3 +249,43 @@ extension TelemetryStore {
         }
     }
 }
+
+// MARK: Changes StarDash notices itself
+
+extension LinkEvent {
+    /// Reason codes for events the dish doesn't log. Far above the dish's own codes so they never collide.
+    static let publicIPChanged = 1001
+    static let bandSwitch = 1002
+}
+
+extension TelemetryStore {
+    /// Logs a new public IP and devices hopping between Wi-Fi bands, which the router never reports as events.
+    func noticeRouterChanges(_ r: RouterStatus) {
+        let now = Date()
+        var found: [LinkEvent] = []
+
+        // Kept across launches, so a change while StarDash was closed still shows up.
+        if let ip = r.publicIPv4, !ip.isEmpty {
+            let key = "lastPublicIP"
+            let previous = UserDefaults.standard.string(forKey: key)
+            if let previous, previous != ip {
+                found.append(LinkEvent(reason: LinkEvent.publicIPChanged, severity: 0, start: now, duration: 0,
+                                       source: "Router", detail: "\(previous) → \(ip)"))
+            }
+            if previous != ip, !Demo.on { UserDefaults.standard.set(ip, forKey: key) }
+        }
+
+        for c in r.clients where c.isWireless && !c.isInfrastructure {
+            let key = c.id
+            defer { clientBands[key] = (c.iface, now) }
+            // Only a device seen on another band moments ago has switched; one coming back after a gap just reconnected.
+            guard let last = clientBands[key], last.band != c.iface, now.timeIntervalSince(last.seen) < 30 else { continue }
+            let from = WifiClient.bandName(last.band), to = c.ifaceName
+            found.append(LinkEvent(reason: LinkEvent.bandSwitch, severity: 0, start: now, duration: 0,
+                                   source: "Router", detail: "\(c.name): \(from) → \(to)"))
+        }
+
+        guard !found.isEmpty else { return }
+        events = Array((found + events).sorted { $0.start > $1.start }.prefix(1000))
+    }
+}

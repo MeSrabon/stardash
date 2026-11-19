@@ -37,6 +37,8 @@ final class TelemetryStore {
     var lastDishUpdate: Date?
     var samples: [Sample] = []
     var events: [LinkEvent] = []
+    /// Each wireless device's band at the last poll, to spot a switch.
+    @ObservationIgnored var clientBands: [String: (band: Int, seen: Date)] = [:]
     var map: ObstructionMap?
 
     // Router
@@ -284,6 +286,7 @@ final class TelemetryStore {
             router = status
             routerError = nil
             track(status.clients)
+            noticeRouterChanges(status)
             recordPing(status)
             if Date().timeIntervalSince(lastRouterHistory) > 1800 {
                 lastRouterHistory = Date()
@@ -322,6 +325,7 @@ final class TelemetryStore {
 
     private struct StoredEvent: Codable {
         var reason: Int, severity: Int, start: Double, duration: Double, source: String
+        var detail: String?
     }
 
     func save() {
@@ -330,7 +334,7 @@ final class TelemetryStore {
         let snapshot = samples
         let stored = events.map {
             StoredEvent(reason: $0.reason, severity: $0.severity, start: $0.start.timeIntervalSince1970,
-                        duration: $0.duration, source: $0.source)
+                        duration: $0.duration, source: $0.source, detail: $0.detail)
         }
         let dir = storeURL
         saveUsage(to: dir)
@@ -358,7 +362,7 @@ final class TelemetryStore {
             let cutoff = Date().addingTimeInterval(-7 * 86_400)
             events = stored
                 .map { LinkEvent(reason: $0.reason, severity: $0.severity, start: Date(timeIntervalSince1970: $0.start),
-                                 duration: $0.duration, source: $0.source) }
+                                 duration: $0.duration, source: $0.source, detail: $0.detail) }
                 .filter { $0.start >= cutoff }
         }
         loadUsage(from: dir)

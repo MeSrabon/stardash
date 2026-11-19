@@ -46,6 +46,8 @@ extension LinkEvent {
         case 4, 18: return "thermometer.high"
         case 13...17, 20: return "wifi.router"
         case 21: return "network"
+        case LinkEvent.publicIPChanged: return "globe"
+        case LinkEvent.bandSwitch: return "wifi"
         default: return isOutage ? "bolt.slash.fill" : "info.circle"
         }
     }
@@ -276,7 +278,7 @@ private struct EventLine: View {
             IconBadge(icon: event.symbol, tint: event.tint, size: 30)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.title).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text("\(Fmt.dayClock.string(from: event.start)) · \(event.source) · \(Names.severity(event.severity))")
+                Text("\(Fmt.dayClock.string(from: event.start)) · \(event.detail ?? "\(event.source) · \(Names.severity(event.severity))")")
                     .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45))
             }
             Spacer()

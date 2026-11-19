@@ -210,6 +210,8 @@ struct LinkEvent: Identifiable, Equatable {
     var start: Date
     var duration: TimeInterval
     var source: String
+    /// What changed, for events StarDash notices itself (which device, which addresses).
+    var detail: String? = nil
 
     var title: String { Names.eventReason(reason) }
     var isOutage: Bool { (1...11).contains(reason) || reason == 19 || reason == 50 }
@@ -350,7 +352,9 @@ struct WifiClient: Identifiable {
         blocked = m.bool(42)
     }
 
-    var ifaceName: String {
+    var ifaceName: String { Self.bandName(iface) }
+
+    static func bandName(_ iface: Int) -> String {
         switch iface {
         case 1: return "Ethernet"
         case 2: return "2.4 GHz"
@@ -606,6 +610,8 @@ enum Names {
         case 48: return "Client opening many connections"
         case 49: return "LAN Ethernet low speed"
         case 50: return "RF inhibited"
+        case LinkEvent.publicIPChanged: return "Public IP changed"
+        case LinkEvent.bandSwitch: return "Switched Wi-Fi band"
         case 51: return "Mesh backhaul flapping"
         default: return "Event \(r)"
         }
