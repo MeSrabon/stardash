@@ -293,6 +293,7 @@ final class TelemetryStore {
                 await backfillPings(client)
             }
             recordDevices(status.clients)
+            RulesEngine.shared.routerUpdated()
         } catch is CancellationError {
             return
         } catch {

@@ -17,6 +17,12 @@ struct NetworkPane: View {
                 LatencyCompare()
                 devices(clients)
                 if !mesh.isEmpty { MeshNodes(nodes: mesh) }
+                if Account.shared.signedIn {
+                    RulesPanel(clients: clients)
+                    RouterCloudPanel()
+                } else {
+                    AccountPrompt(text: "Sign in to your Starlink account to change Wi-Fi and DNS, pause devices and set rules. Everything else here works without it.")
+                }
                 HStack(alignment: .top, spacing: 14) {
                     routerPanel(router)
                     if !store.radios.isEmpty { radiosPanel }
@@ -36,6 +42,8 @@ struct NetworkPane: View {
                         }
                     }
                 }
+                // A router in bypass mode doesn't answer locally, but the account can still reach it.
+                if Account.shared.signedIn { RouterCloudPanel() }
             }
         }
     }

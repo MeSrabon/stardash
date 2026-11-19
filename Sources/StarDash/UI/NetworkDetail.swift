@@ -329,6 +329,9 @@ struct DeviceDetail: View {
                     if let usage = store.deviceUsage[client.mac ?? client.name], usage.down + usage.up > 0 {
                         Fact("This month", "↓ \(Fmt.data(usage.down))   ↑ \(Fmt.data(usage.up))")
                     }
+                    if Account.shared.signedIn {
+                        DevicePauseControl(client: client, isThisMac: isMac)
+                    }
                 }
             }
         }

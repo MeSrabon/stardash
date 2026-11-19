@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
         store.notifier.requestAuthorization()
         store.start()
+        RulesEngine.shared.start(store: store)
         render()
         if Driver.directory != nil {
             showWindow()
