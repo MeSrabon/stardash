@@ -157,6 +157,33 @@ enum Snapshot {
             window.orderOut(nil)
         }
 
+        if arguments.contains("--account") {
+            // The Starlink-account pages, rendered full height. Only reads from the account; never writes.
+            let account = Account.shared
+            await account.loadProfile()
+            await account.loadBilling()
+            await account.loadRouter()
+            print("account \(account.signedIn ? "signed in" : "signed out"), billing \(account.billing != nil), router \(account.router != nil), error \(account.routerError ?? "none")")
+            let overlays = Overlays.shared
+            let clients = store.router?.clients ?? []
+            await shoot("acct-settings", size: CGSize(width: 620, height: 560),
+                        StarlinkAccountPanel().environment(overlays).padding(20).background(.black))
+            await shoot("acct-billing", size: CGSize(width: 1080, height: 760),
+                        BillingUsageView().padding(20).background(.black))
+            await shoot("acct-network", size: CGSize(width: 1080, height: 2400), MainWindow(pane: .network))
+            await shoot("acct-device", size: CGSize(width: 1080, height: 2000), MainWindow(pane: .device))
+            await shoot("acct-rule-editor", size: CGSize(width: 640, height: 1000),
+                        RuleEditor(rule: nil, clients: clients).environment(overlays).padding(20).background(.black))
+            if let networks = account.router?.networks {
+                await shoot("acct-wifi-editor", size: CGSize(width: 620, height: 600),
+                            WifiEditor(networks: networks) { _ in }.environment(overlays).padding(20).background(.black))
+            }
+            await shoot("acct-dns-editor", size: CGSize(width: 620, height: 520),
+                        DNSEditor(current: account.router?.nameservers ?? []) { _, _ in }.environment(overlays).padding(20).background(.black))
+            print("account done")
+            return
+        }
+
         if arguments.contains("--pop") {
             let saved = Settings.shared.themeName
             for theme in ["mono", "glass"] {

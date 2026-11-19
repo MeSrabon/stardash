@@ -6,6 +6,7 @@ import SwiftUI
 /// The optional Starlink account, in Settings.
 struct StarlinkAccountPanel: View {
     @Environment(Overlays.self) private var overlays
+    @Environment(AppActions.self) private var actions
 
     var body: some View {
         let account = Account.shared
@@ -24,6 +25,10 @@ struct StarlinkAccountPanel: View {
                                detailColor: Palette.good) {
                         Button("Sign out…") { confirmSignOut() }
                     }
+                    // Signing in only pays off on other pages, so say where.
+                    unlocked("chart.bar.xaxis", "Billing usage", "Data used this billing cycle and earlier ones, as Starlink counts it", .usage)
+                    unlocked("wifi.router", "Router settings", "Change the Wi-Fi name and password, and the DNS servers", .network)
+                    unlocked("hand.raised", "Network rules", "Data limits, online hours and timers that pause devices for you", .network)
                 case .expired:
                     SettingRow(icon: "person.crop.circle.badge.exclamationmark", tint: Palette.warn, title: "Session ended",
                                detail: "Starlink stopped accepting the saved sign-in.", detailColor: Palette.warn) {
@@ -49,6 +54,12 @@ struct StarlinkAccountPanel: View {
             }
         }
         .task { await account.loadProfile() }
+    }
+
+    private func unlocked(_ icon: String, _ title: String, _ detail: String, _ pane: Pane) -> some View {
+        SettingRow(icon: icon, tint: Palette.accent, title: title, detail: detail) {
+            Button("Open") { actions.showPane(pane) }
+        }
     }
 
     private func confirmSignOut() {
