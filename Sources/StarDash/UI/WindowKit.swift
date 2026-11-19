@@ -163,16 +163,22 @@ struct ActionTile: View {
     var title: String
     var detail: String
     var tint: Color = Palette.accent
+    /// A short result shown in place of the detail line, such as "Copied". Nothing around the tile moves.
+    var status: TileStatus? = nil
     var action: () -> Void
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                IconBadge(icon: icon, tint: tint)
+                IconBadge(icon: status.map { $0.ok ? "checkmark" : "exclamationmark.triangle" } ?? icon,
+                          tint: status.map { $0.ok ? Palette.good : Palette.bad } ?? tint)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.system(size: 13, weight: .medium))
-                    Text(detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.5)).lineLimit(1)
+                    Text(status?.text ?? detail).font(.system(size: 11))
+                        .foregroundStyle(status.map { $0.ok ? Palette.good : Palette.bad } ?? .white.opacity(0.5))
+                        .lineLimit(1)
+                        .help(status?.text ?? detail)
                 }
                 Spacer(minLength: 4)
                 Image(systemName: "chevron.right")
@@ -193,6 +199,11 @@ struct ActionTile: View {
         .animation(.spring(duration: 0.3, bounce: 0.25), value: hovering)
         .onHover { hovering = $0 }
     }
+}
+
+struct TileStatus: Equatable {
+    var text: String
+    var ok = true
 }
 
 /// Four bars for Wi-Fi signal strength in dBm.

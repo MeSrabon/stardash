@@ -4,7 +4,8 @@ import SwiftUI
 struct DevicePane: View {
     @Environment(TelemetryStore.self) private var store
     @Environment(Overlays.self) private var overlays
-    @State private var note: String?
+    /// The latest result, shown on the tile that produced it and cleared after a moment.
+    @State private var result: (tile: String, status: TileStatus)?
 
     private var settings: Settings { Settings.shared }
 
@@ -75,10 +76,26 @@ struct DevicePane: View {
 
     // MARK: Actions
 
+    private func status(_ tile: String) -> TileStatus? {
+        result?.tile == tile ? result?.status : nil
+    }
+
+    /// Shows a result on one tile. Failures stay up longer, since they're worth reading.
+    private func show(_ tile: String, _ text: String, ok: Bool = true) {
+        let status = TileStatus(text: text, ok: ok)
+        withAnimation(.easeOut(duration: 0.15)) { result = (tile, status) }
+        Task {
+            try? await Task.sleep(for: .seconds(ok ? 2.5 : 6))
+            if result?.status == status, result?.tile == tile {
+                withAnimation(.easeOut(duration: 0.25)) { result = nil }
+            }
+        }
+    }
+
     private func actions(_ dish: DishStatus) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 14) {
-                ActionTile(icon: "arrow.clockwise", title: "Reboot dish", detail: "A few minutes offline", tint: Palette.bad) {
+                ActionTile(icon: "arrow.clockwise", title: "Reboot dish", detail: "A few minutes offline", tint: Palette.bad, status: status("reboot")) {
                     overlays.confirm = ConfirmRequest(
                         title: "Reboot the dish?",
                         message: "Everything on this network goes offline for a few minutes.",
@@ -86,14 +103,14 @@ struct DevicePane: View {
                     ) {
                         Task {
                             let ok = await store.rebootDish()
-                            note = ok ? "Reboot requested. Expect a few minutes offline." : "The dish didn't accept the reboot request."
+                            show("reboot", ok ? "Requested. Back in a few minutes." : "The dish didn't accept it.", ok: ok)
                         }
                     }
                 }
                 ActionTile(icon: "person.crop.circle", title: "Starlink account", detail: "Plan, billing and support on starlink.com") {
                     if let url = URL(string: "https://www.starlink.com/account") { NSWorkspace.shared.open(url) }
                 }
-                ActionTile(icon: "doc.on.doc", title: "Copy details", detail: "Model, firmware and ID for support", tint: Palette.up) {
+                ActionTile(icon: "doc.on.doc", title: "Copy details", detail: "Model, firmware and ID for support", tint: Palette.up, status: status("copy")) {
                     let text = [
                         "Model: \(dish.modelName)",
                         "Hardware: \(dish.hardwareVersion ?? Fmt.missing)",
@@ -102,24 +119,22 @@ struct DevicePane: View {
                     ].joined(separator: "\n")
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(text, forType: .string)
-                    note = "Copied to the clipboard."
+                    show("copy", "Copied to the clipboard")
                 }
-                ActionTile(icon: "square.and.arrow.down", title: "Export debug data", detail: "Everything StarDash reads, as a file", tint: Palette.up) {
+                ActionTile(icon: "square.and.arrow.down", title: "Export debug data", detail: "Everything StarDash reads, as a file", tint: Palette.up, status: status("export")) {
                     let panel = NSSavePanel()
                     panel.nameFieldStringValue = "StarDash debug \(Fmt.fileStamp.string(from: Date())).json"
                     panel.allowedContentTypes = [.json]
                     guard panel.runModal() == .OK, let url = panel.url else { return }
                     do {
                         try DebugExport.data(store).write(to: url, options: .atomic)
-                        note = "Saved \(url.lastPathComponent)."
+                        show("export", "Saved \(url.lastPathComponent)")
                     } catch {
-                        note = "Couldn't save the file: \(error.localizedDescription)"
+                        show("export", "Couldn't save: \(error.localizedDescription)", ok: false)
                     }
                 }
             }
-            if let note {
-                Text(note).font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.55)).padding(.leading, 4)
-            }
+
         }
     }
 

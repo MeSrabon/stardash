@@ -43,7 +43,8 @@ final class Account {
 
     private init() {
         // Only the keychain is read here. Nothing is sent until a page asks for account data.
-        status = Keychain.read() != nil ? .signedIn : .signedOut
+        // Demo mode is for screenshots, so it never touches the real account (or its keychain prompt).
+        status = !Demo.on && Keychain.read() != nil ? .signedIn : .signedOut
     }
 
     // MARK: Session
