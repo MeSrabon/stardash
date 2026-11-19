@@ -58,6 +58,8 @@ struct LatencyCompare: View {
             + router.map { Mark(series: Self.routerName, date: $0.date, value: $0.value) }
             + net.map { Mark(series: Self.netName, date: $0.date, value: $0.value) }
         let dishMid = median(dish.map(\.value)), routerMid = median(router.map(\.value)), netMid = median(net.map(\.value))
+        let dishRaw = store.window(minutes * 60).filter { $0.drop < 1 && $0.latency > 0 }.map { Double($0.latency) }
+        let routerRaw = recent.filter { $0.pop >= 0 }.map { Double($0.pop) }
 
         return Panel {
             VStack(alignment: .leading, spacing: 12) {
@@ -103,8 +105,91 @@ struct LatencyCompare: View {
                 if let line = summary(dish: dishMid, router: routerMid, net: netMid) {
                     Text(line).font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.55))
                 }
+                if dishRaw.count >= 20 {
+                    distribution(dish: dishRaw, router: routerRaw)
+                }
             }
         }
+    }
+
+    // MARK: Distribution
+
+    private struct Bin: Identifiable {
+        var id: String { "\(series)-\(low)" }
+        var series: String
+        var low: Double
+        var share: Double
+    }
+
+    private static let binWidth = 5.0
+    private static let binCount = 20
+
+    /// Share of pings in each 5 ms band. Everything past the last band lands in it, so slow outliers still count.
+    private func bins(_ values: [Double], series: String) -> [Bin] {
+        guard !values.isEmpty else { return [] }
+        var counts = [Int](repeating: 0, count: Self.binCount)
+        for v in values { counts[min(Self.binCount - 1, max(0, Int(v / Self.binWidth)))] += 1 }
+        return counts.enumerated().map { i, n in
+            Bin(series: series, low: Double(i) * Self.binWidth, share: Double(n) / Double(values.count))
+        }
+    }
+
+    private func percentile(_ values: [Double], _ p: Double) -> Double? {
+        guard !values.isEmpty else { return nil }
+        let sorted = values.sorted()
+        return sorted[min(sorted.count - 1, Int(Double(sorted.count - 1) * p))]
+    }
+
+    /// How often each latency comes up. A tall narrow peak is a steady link; a long tail is what makes calls stutter.
+    private func distribution(dish: [Double], router: [Double]) -> some View {
+        let all = bins(dish, series: Self.dishName) + bins(router, series: Self.routerName)
+        let last = Double(Self.binCount - 1) * Self.binWidth
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Kicker("How latency is spread")
+                Spacer()
+                Text("Share of pings in each 5 ms band").font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.4))
+            }
+            .padding(.top, 6)
+            Chart(all) { bin in
+                // The dish's bar sits in the left half of each band and the router's in the right, so both stay readable.
+                let left = bin.series == Self.dishName
+                RectangleMark(xStart: .value("ms", bin.low + (left ? 0.4 : 2.5)),
+                        xEnd: .value("ms", bin.low + (left ? 2.5 : 4.6)),
+                        yStart: .value("Share", 0.0),
+                        yEnd: .value("Share", bin.share))
+                    .foregroundStyle(by: .value("Series", bin.series))
+            }
+            .chartForegroundStyleScale(domain: colors.map(\.0), range: colors.map(\.1))
+            .chartLegend(.hidden)
+            .chartXScale(domain: 0...(last + Self.binWidth))
+            .chartXAxis {
+                AxisMarks(values: Array(stride(from: 0.0, through: last + Self.binWidth, by: 20))) { value in
+                    AxisValueLabel {
+                        if let v = value.as(Double.self) {
+                            Text(v >= last + Self.binWidth ? "\(Int(last))+ ms" : "\(Int(v)) ms").font(.system(size: 9.5))
+                        }
+                    }
+                }
+            }
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                    AxisGridLine().foregroundStyle(.white.opacity(0.06))
+                    AxisValueLabel { if let v = value.as(Double.self) { Text(Fmt.percent(v, digits: 0)).font(.system(size: 9.5)) } }
+                }
+            }
+            .frame(height: 120)
+            HStack(spacing: 18) {
+                tail("Dish", percentile(dish, 0.95))
+                tail("Router", percentile(router, 0.95))
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func tail(_ name: String, _ p95: Double?) -> some View {
+        Text(p95.map { "\(name): 95% of pings under \(Int($0.rounded())) ms" } ?? "\(name): not enough pings yet")
+            .font(.system(size: 11.5)).foregroundStyle(.white.opacity(0.55))
     }
 
     private func figure(_ name: String, _ value: Double?) -> some View {
