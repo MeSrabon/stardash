@@ -37,7 +37,7 @@ struct RulesPanel: View {
 
     /// Devices a rule can name: ones the router numbers, and never this Mac.
     private var selectable: [WifiClient] {
-        clients.filter { $0.clientID != nil && !($0.ip.map(store.localIPs.contains) ?? false) }
+        clients.filter { $0.clientID != nil && !$0.isInfrastructure && !($0.ip.map(store.localIPs.contains) ?? false) }
     }
 
     private func open(_ rule: NetworkRule?) {
@@ -135,7 +135,11 @@ struct RuleEditor: View {
     init(rule: NetworkRule?, clients: [WifiClient]) {
         original = rule
         self.clients = clients
-        var devices = clients.map(RuleDevice.init)
+        // Never offer the router, a mesh node or this Mac: pausing any of them cuts StarDash off too.
+        let mine = LocalNetwork.ipv4Addresses()
+        var devices = clients
+            .filter { $0.clientID != nil && !$0.isInfrastructure && !($0.ip.map(mine.contains) ?? false) }
+            .map(RuleDevice.init)
         for device in rule?.devices ?? [] where !devices.contains(where: { $0.id == device.id }) { devices.append(device) }
         _known = State(initialValue: devices)
         _name = State(initialValue: rule?.name ?? "")
@@ -242,7 +246,7 @@ struct RuleEditor: View {
                     .buttonStyle(.plain)
                 }
             }
-            Text("This Mac isn't listed. StarDash won't pause the Mac it runs on.")
+            Text("This Mac and the router aren't listed. Pausing either would cut StarDash off.")
                 .font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.3))
         }
     }
