@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        installEditMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.target = self
@@ -178,5 +179,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     func popoverDidClose(_ notification: Notification) {
         store.popoverOpen = false
+    }
+}
+
+extension AppDelegate {
+    /// macOS sends ⌘C, ⌘V, ⌘X, ⌘A and ⌘Z through the Edit menu, so without one those shortcuts do nothing
+    /// in text fields and on the Starlink sign-in page. The menus show while the main window is open.
+    func installEditMenu() {
+        let edit = NSMenu(title: "Edit")
+        func add(_ title: String, _ action: Selector, _ key: String, _ modifiers: NSEvent.ModifierFlags = .command) {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.keyEquivalentModifierMask = modifiers
+            edit.addItem(item)
+        }
+        add("Undo", Selector(("undo:")), "z")
+        add("Redo", Selector(("redo:")), "z", [.command, .shift])
+        edit.addItem(.separator())
+        add("Cut", #selector(NSText.cut(_:)), "x")
+        add("Copy", #selector(NSText.copy(_:)), "c")
+        add("Paste", #selector(NSText.paste(_:)), "v")
+        add("Select All", #selector(NSText.selectAll(_:)), "a")
+        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
+        editItem.submenu = edit
+        let app = NSMenu(title: "StarDash")
+        let settings = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
+        settings.target = self
+        app.addItem(settings)
+        app.addItem(.separator())
+        app.addItem(NSMenuItem(title: "Hide StarDash", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
+        app.addItem(NSMenuItem(title: "Quit StarDash", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        let appItem = NSMenuItem(title: "StarDash", action: nil, keyEquivalent: "")
+        appItem.submenu = app
+        let main = NSMenu()
+        main.addItem(appItem)
+        main.addItem(editItem)
+        NSApp.mainMenu = main
     }
 }
