@@ -68,6 +68,11 @@ struct SkyOverlay {
             // The small dashboard chart only has room for the satellites that could be serving.
             if compact, !inRange { continue }
             let ink = Color.white.opacity(inRange ? 1 : 0.4)
+            // At popover size 80 craft turn into a pile, so the others are plain dots there.
+            if compact, sat.id != best {
+                context.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)), with: .color(ink.opacity(0.75)))
+                continue
+            }
             var heading: CGFloat = -.pi / 4
             if let next = ahead[sat.id], let q = project(next.azimuth, next.elevation) {
                 let dx = q.x - p.x, dy = q.y - p.y
@@ -106,6 +111,8 @@ struct SkyOverlay {
         let craft = SatelliteGlyph.path(at: p, width: compact ? 12 : 19, angle: heading + .pi / 2)
         context.stroke(craft, with: .color(.black.opacity(0.8)), style: StrokeStyle(lineWidth: 2.4, lineJoin: .round))
         context.fill(craft, with: .color(Palette.link))
+        // The popover names it in the text beside the chart.
+        if compact { return }
 
         let label = Text(name).font(.system(size: compact ? 8.5 : 10, weight: .semibold)).foregroundColor(.white)
         let resolved = context.resolve(label)

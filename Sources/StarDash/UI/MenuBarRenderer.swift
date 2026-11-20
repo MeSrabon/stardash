@@ -38,16 +38,7 @@ enum MenuBarRenderer {
         var segments: [Segment] = []
         let state = store.state
 
-        let symbolName: String
-        switch state {
-        case .online, .degraded: symbolName = "antenna.radiowaves.left.and.right"
-        case .offline, .unreachable: symbolName = "antenna.radiowaves.left.and.right.slash"
-        }
-        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .medium)
-        if let symbol = NSImage(systemSymbolName: symbolName, accessibilityDescription: "Starlink")?
-            .withSymbolConfiguration(config) {
-            segments.append(.icon(symbol))
-        }
+        segments.append(.icon(logo(online: state.isUp)))
 
         // When something's wrong, say what. A dish that's down has no numbers worth showing.
         switch state {
@@ -109,6 +100,52 @@ enum MenuBarRenderer {
             return true
         }
         image.isTemplate = true
+        return image
+    }
+
+    /// The app icon's dish and satellite, without its tile. Offline, the signal arcs go and the satellite fades.
+    static func logo(online: Bool, height: CGFloat = 17) -> NSImage {
+        // The icon's artwork spans about x 19...92, y 15...88 of its 100-unit square.
+        let box = NSRect(x: 19, y: 15, width: 73, height: 73)
+        let scale = height / box.height
+        let image = NSImage(size: NSSize(width: ceil(box.width * scale), height: height), flipped: true) { _ in
+            let t = NSAffineTransform()
+            t.scale(by: scale)
+            t.translateX(by: -box.minX, yBy: -box.minY)
+            t.concat()
+            NSColor.black.set()
+            func line(_ a: NSPoint, _ b: NSPoint, width: CGFloat = 4) {
+                let p = NSBezierPath(); p.move(to: a); p.line(to: b)
+                p.lineWidth = width; p.lineCapStyle = .round; p.stroke()
+            }
+            line(NSPoint(x: 49, y: 71), NSPoint(x: 49, y: 85))
+            line(NSPoint(x: 39, y: 85), NSPoint(x: 59, y: 85))
+            let dish = NSBezierPath()
+            dish.move(to: NSPoint(x: 76, y: 62)); dish.line(to: NSPoint(x: 43, y: 40))
+            dish.line(to: NSPoint(x: 22, y: 54)); dish.line(to: NSPoint(x: 55, y: 76)); dish.close()
+            dish.lineWidth = 4; dish.lineJoinStyle = .round
+            dish.fill(); dish.stroke()
+            if online {
+                // Arcs centred on (72, 28), the satellite, from the SVG's arc endpoints.
+                for (radius, alpha) in [(10.0, 1.0), (17.0, 0.55)] as [(CGFloat, CGFloat)] {
+                    let arc = NSBezierPath()
+                    arc.appendArc(withCenter: NSPoint(x: 72, y: 28), radius: radius, startAngle: 153, endAngle: 103, clockwise: true)
+                    arc.lineWidth = 4; arc.lineCapStyle = .round
+                    NSColor.black.withAlphaComponent(alpha).setStroke(); arc.stroke()
+                }
+            }
+            NSColor.black.withAlphaComponent(online ? 1 : 0.35).set()
+            let sat = NSAffineTransform()
+            sat.translateX(by: 72, yBy: 28); sat.rotate(byDegrees: 35); sat.translateX(by: -72, yBy: -28)
+            sat.concat()
+            NSBezierPath(roundedRect: NSRect(x: 56, y: 25.5, width: 10.5, height: 5), xRadius: 1, yRadius: 1).fill()
+            NSBezierPath(roundedRect: NSRect(x: 77.5, y: 25.5, width: 10.5, height: 5), xRadius: 1, yRadius: 1).fill()
+            NSBezierPath(roundedRect: NSRect(x: 68.5, y: 24.5, width: 7, height: 7), xRadius: 1.5, yRadius: 1.5).fill()
+            line(NSPoint(x: 66.5, y: 28), NSPoint(x: 77.5, y: 28), width: 1.8)
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "StarDash"
         return image
     }
 
