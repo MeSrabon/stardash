@@ -1,7 +1,10 @@
 # Releasing
 
 Pushing a tag like `v0.2.0` builds StarDash, signs it with the Developer ID certificate,
-notarizes the disk image with Apple and attaches it to a GitHub release.
+notarizes the disk image with Apple and attaches it to a GitHub release. The release notes are
+that version's section of [CHANGELOG.md](../CHANGELOG.md), so first rename `[Unreleased]` to the
+new version with today's date, start a fresh `[Unreleased]` above it, update the compare links at
+the bottom and commit.
 
 ```sh
 git tag v0.2.0

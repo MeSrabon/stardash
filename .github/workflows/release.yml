@@ -86,12 +86,14 @@ jobs:
         run: |
           cd dist
           shasum -a 256 "StarDash-$VERSION.dmg" > "StarDash-$VERSION.dmg.sha256"
-          NOTES=""
+          # The release notes are this version's section of CHANGELOG.md.
+          awk -v v="$VERSION" '/^## \[/ { on = index($0, "[" v "]") > 0; next } /^\[[^]]*\]: / { on = 0 } on' ../CHANGELOG.md > notes.md
           if [ "$SIGNED" != "true" ]; then
-            NOTES="This build isn't notarized yet. If macOS won't open it, go to System Settings › Privacy & Security and click Open Anyway, or run: xattr -dr com.apple.quarantine /Applications/StarDash.app"
+            echo "" >> notes.md
+            echo "> This build isn't notarized yet. If macOS won't open it, go to System Settings › Privacy & Security and click Open Anyway, or run: \`xattr -dr com.apple.quarantine /Applications/StarDash.app\`" >> notes.md
           fi
           gh release create "$GITHUB_REF_NAME" "StarDash-$VERSION.dmg" "StarDash-$VERSION.dmg.sha256" \
-            --title "StarDash $VERSION" --generate-notes --notes "$NOTES" --verify-tag
+            --title "StarDash $VERSION" --notes-file notes.md --verify-tag
 
       - name: Remove the signing keychain
         if: always() && env.SIGNED == 'true'

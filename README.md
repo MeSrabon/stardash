@@ -3,7 +3,8 @@
 # StarDash
 
 A native macOS monitor for Starlink. It lives in the menu bar and talks to your dish and router
-over the local network, so nothing leaves your Mac and no Starlink account is needed.
+over the local network. Everything works without a Starlink account. Signing in is optional and
+adds the features that only exist in the cloud, like billing usage and router settings.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
@@ -12,10 +13,20 @@ over the local network, so nothing leaves your Mac and no Starlink account is ne
 - Live throughput, latency, packet loss and power draw in the menu bar, with a one-screen popover.
 - The dish's obstruction map as a flat chart, a horizon view and a 3D dome, with a time-lapse of how it filled in.
 - The Starlink satellites overhead right now, computed from public orbit data, and the one the dish is most likely using.
+  The 3D view puts the dish under a night sky and links it to that satellite.
 - Outages and alerts over time, including ones the dish has already forgotten.
 - Every device on the Wi-Fi with its vendor, signal and traffic, plus mesh nodes.
 - Speed tests from the Mac and from the router, with packet loss.
-- Dish settings: snow melt, sleep schedule, update time, obstruction map reset, stow and reboot.
+- Latency spread for the dish and the router, and a log of public IP changes.
+- Dish settings: snow melt, sleep schedule, update time, obstruction map reset, stow, reboot and factory reset.
+- Debug data export as a JSON file.
+
+## Starlink account (optional)
+
+Sign in from Settings to unlock billing usage, router settings (Wi-Fi name, password and DNS) and
+network rules (data limits, online hours and pause timers). The session is kept in your keychain and
+StarDash only contacts starlink.com for these features, with the same requests the Starlink website
+makes. Signing out deletes it.
 
 ## Screenshots
 
@@ -37,6 +48,8 @@ macOS 14 or later, on the same network as a Starlink dish. The default addresses
 Download the latest `.dmg` from [Releases](../../releases), open it and drag StarDash to Applications.
 If macOS says it can't verify the developer, open System Settings › Privacy & Security and click
 Open Anyway. Signed and notarized builds are on the way.
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
 
 ## Build from source
 
