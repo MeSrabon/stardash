@@ -573,7 +573,7 @@ final class DomeScene {
             ring.stroke()
             return true
         }
-        let plane = SCNPlane(width: 0.1, height: 0.1)
+        let plane = SCNPlane(width: 0.24, height: 0.24)
         let material = SceneKitHelpers.glow(.white)
         material.diffuse.contents = image
         material.readsFromDepthBuffer = false
@@ -607,19 +607,19 @@ final class DomeScene {
             guard i < sky.satellites.count else { node.isHidden = true; continue }
             let sat = sky.satellites[i]
             let inRange = sat.elevation >= SkyWatch.serviceElevation
-            let p = SceneKitHelpers.skyDirection(azimuth: sat.azimuth, elevation: sat.elevation) * 1.012
+            let p = Self.orbitPoint(azimuth: sat.azimuth, elevation: sat.elevation)
             node.isHidden = false
             node.simdPosition = p
             node.geometry = sat.id == sky.best ? Self.linkedCraft : Self.craft
             node.simdScale = simd_float3(repeating: Self.scale(sat, best: sky.best, hovered: hoveredID))
-            if sat.id == hoveredID { hoverLabel?.simdPosition = p * 1.12 }
+            if sat.id == hoveredID { hoverLabel?.simdPosition = p + Self.labelLift }
             node.opacity = inRange || sat.id == sky.best ? 1 : 0.45
             if let next = sky.ahead[sat.id] {
-                let q = SceneKitHelpers.skyDirection(azimuth: next.azimuth, elevation: next.elevation) * 1.012
+                let q = Self.orbitPoint(azimuth: next.azimuth, elevation: next.elevation)
                 let step = q - p
                 if simd_length(step) > 0.0005 {
                     // A short trail behind it, the way it came.
-                    segments.append(SCNVector3(p - simd_normalize(step) * 0.04))
+                    segments.append(SCNVector3(p - simd_normalize(step) * 0.1))
                     segments.append(SCNVector3(p))
                 }
             }
@@ -635,11 +635,11 @@ final class DomeScene {
         }
         if best?.1 != bestName {
             bestLabel?.removeFromParentNode()
-            bestLabel = best.map { SceneKitHelpers.label($0.1, color: .white, size: 0.07) }
+            bestLabel = best.map { SceneKitHelpers.label($0.1, color: .white, size: 0.13) }
             bestLabel.map(turntable.addChildNode)
             bestName = best?.1
         }
-        if let best { bestLabel?.simdPosition = best.0 * 1.13 }
+        if let best { bestLabel?.simdPosition = best.0 + Self.labelLift * 1.3 }
         halo.isHidden = best == nil
         if let best { halo.simdPosition = best.0 }
 
@@ -672,8 +672,8 @@ final class DomeScene {
             node.simdScale = simd_float3(repeating: Self.scale(sat, best: bestID, hovered: id))
             // The best placed one already carries its name.
             if sat.id == id, sat.id != bestID {
-                let label = SceneKitHelpers.label(String(format: "%@ · %.0f° up", sat.name, sat.elevation), color: .white, size: 0.065)
-                label.simdPosition = node.simdPosition * 1.11
+                let label = SceneKitHelpers.label(String(format: "%@ · %.0f° up", sat.name, sat.elevation), color: .white, size: 0.12)
+                label.simdPosition = node.simdPosition + Self.labelLift
                 label.renderingOrder = 30
                 turntable.addChildNode(label)
                 hoverLabel = label
@@ -1015,9 +1015,19 @@ final class DomeScene {
         dish.simdOrientation = simd_quatf(from: [0, 1, 0], to: SceneKitHelpers.skyDirection(azimuth: az, elevation: el))
     }
 
+    /// Where a satellite is drawn: along its true direction from the dish, out to a flat ceiling high above it,
+    /// the way the orbital shell looks from the ground. Overhead ones are close; low ones are far off and sit
+    /// just over the horizon. Height isn't to scale.
+    static let orbitHeight: Float = 2.3
+    static func orbitPoint(azimuth: Double, elevation: Double) -> simd_float3 {
+        let dir = SceneKitHelpers.skyDirection(azimuth: azimuth, elevation: elevation)
+        return dir * min(18, orbitHeight / max(dir.y, 0.05))
+    }
+    private static let labelLift = simd_float3(0, 0.17, 0)
+
     /// Satellite sprites: one plain, one for the satellite the dish is most likely linked to.
-    private static let craft = sprite(SatelliteGlyph.glint(color: NSColor(white: 0.92, alpha: 1)), side: 0.05)
-    private static let linkedCraft = sprite(SatelliteGlyph.glint(color: NSColor(Palette.link)), side: 0.055)
+    private static let craft = sprite(SatelliteGlyph.glint(color: NSColor(white: 0.92, alpha: 1)), side: 0.11)
+    private static let linkedCraft = sprite(SatelliteGlyph.glint(color: NSColor(Palette.link)), side: 0.12)
 
     private static func sprite(_ image: NSImage, side: CGFloat) -> SCNPlane {
         let plane = SCNPlane(width: side, height: side)
@@ -1093,10 +1103,10 @@ struct DomeView: NSViewRepresentable {
             guard let view else { return }
             scene.hover(at: point, in: view)
         }
-        // Pulled back far enough that the whole horizon ring, and the satellites on it, sit clear of
-        // the title above and the time-lapse bar below.
-        view.configure(target: [0, 0.42, 0], yaw: 0.35, pitch: 0.17, distance: 4.0,
-                       pitchRange: 0.06...1.5, distanceRange: 1.6...6.5)
+        // Low and pulled back: the dome on the ground in front, the horizon behind, and the satellites
+        // overhead in the upper part of the view.
+        view.configure(target: [0, 1.0, 0], yaw: 0.35, pitch: 0.12, distance: 6.4,
+                       pitchRange: 0.04...1.5, distanceRange: 1.6...11)
         return view
     }
 
