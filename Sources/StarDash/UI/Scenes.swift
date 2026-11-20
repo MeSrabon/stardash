@@ -481,7 +481,6 @@ final class DomeScene {
     private let mapLayer = SCNNode()
     private let satellites = SCNNode()
     private var satellitePool: [SCNNode] = []
-    private let tails = SCNNode()
     private let link = SCNNode()
     private var shown: [VisibleSatellite] = []
     private var bestID: Int?
@@ -529,7 +528,6 @@ final class DomeScene {
         buildDish()
         rebuildDome()
         turntable.addChildNode(satellites)
-        turntable.addChildNode(tails)
         buildHalo()
         buildBeam()
     }
@@ -601,7 +599,6 @@ final class DomeScene {
         shown = sky.satellites
         bestID = sky.best
         if let hoveredID, !shown.contains(where: { $0.id == hoveredID }) { setHovered(nil) }
-        var segments: [SCNVector3] = []
         var best: (simd_float3, String)?
         for (i, node) in satellitePool.enumerated() {
             guard i < sky.satellites.count else { node.isHidden = true; continue }
@@ -614,24 +611,7 @@ final class DomeScene {
             node.simdScale = simd_float3(repeating: Self.scale(sat, best: sky.best, hovered: hoveredID))
             if sat.id == hoveredID { hoverLabel?.simdPosition = p + Self.labelLift }
             node.opacity = inRange || sat.id == sky.best ? 1 : 0.45
-            if let next = sky.ahead[sat.id] {
-                let q = Self.orbitPoint(azimuth: next.azimuth, elevation: next.elevation)
-                let step = q - p
-                if simd_length(step) > 0.0005 {
-                    // A short trail behind it, the way it came.
-                    segments.append(SCNVector3(p - simd_normalize(step) * 0.1))
-                    segments.append(SCNVector3(p))
-                }
-            }
             if sat.id == sky.best { best = (p, sat.name) }
-        }
-        if segments.isEmpty {
-            tails.geometry = nil
-        } else {
-            let geometry = SCNGeometry(sources: [SCNGeometrySource(vertices: segments)],
-                                       elements: [SCNGeometryElement(indices: (0..<Int32(segments.count)).map { $0 }, primitiveType: .line)])
-            geometry.firstMaterial = SceneKitHelpers.flat(NSColor(white: 1, alpha: 0.28))
-            tails.geometry = geometry
         }
         if best?.1 != bestName {
             bestLabel?.removeFromParentNode()
