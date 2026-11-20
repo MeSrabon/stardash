@@ -12,7 +12,6 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 - A Sky map switch hides the dome, for a clear view of the dish and the satellites.
 - Satellites on the radar and horizon views are drawn as craft facing the way they fly,
   with a short fading trail.
-
 - The menu bar icon is the app's dish and satellite. When the dish is offline, the signal arcs
   go and the satellite fades.
 - The popover's sky chart shows satellites as dots, with only the likely connected one drawn as a craft.
