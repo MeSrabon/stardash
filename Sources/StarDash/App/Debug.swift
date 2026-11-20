@@ -657,6 +657,12 @@ enum Driver {
                 var frame = scene.convert(scene.bounds, to: view)
                 if view.isFlipped { frame.origin.y = view.bounds.height - frame.maxY }
                 scene.snapshot().draw(in: frame)
+                // Lay the controls drawn over the 3D view back on top. Lighten keeps light text and lines and
+                // lets the scene show through the dark gaps between them.
+                NSGraphicsContext.saveGraphicsState()
+                NSBezierPath(rect: frame).addClip()
+                image.draw(in: rect, from: .zero, operation: .lighten, fraction: 1)
+                NSGraphicsContext.restoreGraphicsState()
             }
             return true
         }

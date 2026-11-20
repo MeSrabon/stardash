@@ -520,6 +520,7 @@ final class DomeScene {
         rimNode.eulerAngles = SCNVector3(-0.4, .pi, 0)
         scene.rootNode.addChildNode(rimNode)
 
+        buildSpace()
         buildGround()
         buildGrid()
         buildDish()
@@ -686,6 +687,144 @@ final class DomeScene {
         link.simdOrientation = simd_quatf(from: [0, 1, 0], to: simd_normalize(span))
         link.simdScale = [1, simd_length(span), 1]
     }
+
+    /// Space around everything: stars and the Milky Way on a far sphere, a faint airglow along the horizon,
+    /// and a patch of dark ground under the dome. All on the turntable, so the sky turns with the dome.
+    private func buildSpace() {
+        let sphere = SCNSphere(radius: 30)
+        sphere.segmentCount = 72
+        let stars = SceneKitHelpers.flat(.white)
+        stars.diffuse.contents = Self.starTexture
+        stars.diffuse.mipFilter = .linear
+        stars.cullMode = .front
+        stars.writesToDepthBuffer = false
+        sphere.firstMaterial = stars
+        let sky = SCNNode(geometry: sphere)
+        sky.renderingOrder = -20
+        turntable.addChildNode(sky)
+
+        // Airglow: a hemisphere just inside the dome, blue at the horizon and gone by the zenith.
+        var vertices: [SCNVector3] = [], colors: [SCNVector3] = [], indices: [Int32] = []
+        let azSteps = 72, elSteps = 24
+        for e in 0...elSteps {
+            let elevation = Double(e) / Double(elSteps) * 90
+            let f = Float(pow(1 - elevation / 90, 10)) * 0.28
+            for a in 0...azSteps {
+                vertices.append(SCNVector3(SceneKitHelpers.skyDirection(azimuth: Double(a) / Double(azSteps) * 360, elevation: elevation) * 0.995))
+                colors.append(SCNVector3(0.10 * f, 0.22 * f, 0.50 * f))
+            }
+        }
+        let row = Int32(azSteps + 1)
+        for e in 0..<Int32(elSteps) {
+            for a in 0..<Int32(azSteps) {
+                let i = e * row + a
+                indices += [i, i + 1, i + row, i + 1, i + row + 1, i + row]
+            }
+        }
+        let glow = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices),
+                                         SCNGeometrySource(data: Data(bytes: colors, count: colors.count * MemoryLayout<SCNVector3>.stride),
+                                                           semantic: .color, vectorCount: colors.count, usesFloatComponents: true,
+                                                           componentsPerVector: 3, bytesPerComponent: MemoryLayout<CGFloat>.size,
+                                                           dataOffset: 0, dataStride: MemoryLayout<SCNVector3>.stride)],
+                               elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)])
+        let air = SceneKitHelpers.glow(.white)
+        air.readsFromDepthBuffer = false
+        glow.firstMaterial = air
+        let airNode = SCNNode(geometry: glow)
+        airNode.renderingOrder = 8
+        turntable.addChildNode(airNode)
+
+        // Dark ground out to the horizon, fading so its edge never shows.
+        let land = SCNPlane(width: 3.4, height: 3.4)
+        let landMaterial = SceneKitHelpers.flat(.white)
+        landMaterial.diffuse.contents = Self.groundTexture
+        landMaterial.writesToDepthBuffer = false
+        land.firstMaterial = landMaterial
+        let landNode = SCNNode(geometry: land)
+        landNode.eulerAngles.x = -.pi / 2
+        landNode.position.y = -0.004
+        landNode.renderingOrder = -3
+        turntable.addChildNode(landNode)
+    }
+
+    /// Stars on an equirectangular map: thousands of points of mixed brightness and colour, and a denser,
+    /// cloudy band for the Milky Way. Seeded, so it's the same sky every launch.
+    private static let starTexture: CGImage? = {
+        let w = 4096, h = 2048
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        // y = h/2 is the horizon; north (the zenith side) is up.
+        let horizon = CGFloat(h) / 2
+        var rng = SeededRandom(seed: 0x5DA5)
+        func point(lat: Double, lon: Double) -> CGPoint {
+            CGPoint(x: CGFloat((lon + .pi) / (2 * .pi)) * CGFloat(w), y: horizon + CGFloat(lat / (.pi / 2)) * horizon)
+        }
+        // Anything near the left or right edge is drawn again across the seam, so the wrap doesn't show.
+        func wrapped(_ p: CGPoint, _ r: CGFloat) -> [CGPoint] {
+            var points = [p]
+            if p.x < r { points.append(CGPoint(x: p.x + CGFloat(w), y: p.y)) }
+            if p.x > CGFloat(w) - r { points.append(CGPoint(x: p.x - CGFloat(w), y: p.y)) }
+            return points
+        }
+        func dot(_ p: CGPoint, _ r: CGFloat, _ color: CGColor) {
+            ctx.setFillColor(color)
+            for q in wrapped(p, r) { ctx.fillEllipse(in: CGRect(x: q.x - r, y: q.y - r, width: r * 2, height: r * 2)) }
+        }
+        // The Milky Way: a great circle tilted across the sky. Soft clouds first, then a crowd of faint stars in them.
+        let tilt = 1.05, node = 0.6
+        func bandPoint(along t: Double, off: Double) -> (lat: Double, lon: Double) {
+            // Point on the tilted circle, nudged off it by `off` radians.
+            var x = cos(t), y = sin(t) * cos(tilt), z = sin(t) * sin(tilt)
+            y += off * -sin(tilt) * 1; z += off * cos(tilt)
+            let n = (x * x + y * y + z * z).squareRoot(); x /= n; y /= n; z /= n
+            return (asin(z), atan2(y, x) + node - .pi)
+        }
+        for _ in 0..<4000 {
+            let (lat, lon) = bandPoint(along: rng.next() * 2 * .pi, off: rng.gaussian() * 0.16)
+            let p = point(lat: lat, lon: lon)
+            let r = CGFloat(18 + rng.next() * 46)
+            if let cloud = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                CGColor(red: 0.62, green: 0.68, blue: 0.85, alpha: 0.05), CGColor(red: 0.5, green: 0.55, blue: 0.75, alpha: 0)] as CFArray, locations: [0, 1]) {
+                for q in wrapped(p, r) {
+                    ctx.drawRadialGradient(cloud, startCenter: q, startRadius: 0, endCenter: q, endRadius: r, options: [])
+                }
+            }
+        }
+        for _ in 0..<16000 {
+            let (lat, lon) = bandPoint(along: rng.next() * 2 * .pi, off: rng.gaussian() * 0.12)
+            dot(point(lat: lat, lon: lon), 0.55, CGColor(red: 0.85, green: 0.88, blue: 1, alpha: 0.12 + rng.next() * 0.3))
+        }
+        // The general field. Mostly faint; a few bright ones with a halo; colours from blue-white to warm.
+        let tints: [(CGFloat, CGFloat, CGFloat)] = [(0.75, 0.82, 1), (1, 1, 1), (1, 0.95, 0.85), (1, 0.85, 0.7)]
+        for _ in 0..<12000 {
+            let lat = asin(rng.next() * 2 - 1), lon = rng.next() * 2 * .pi - .pi
+            let p = point(lat: lat, lon: lon)
+            let b = pow(rng.next(), 5)
+            let t = tints[Int(rng.next() * Double(tints.count)) % tints.count]
+            let r = CGFloat(0.45 + b * 0.9)
+            if b > 0.7 {
+                dot(p, r * 2.4, CGColor(red: t.0, green: t.1, blue: t.2, alpha: 0.06))
+            }
+            dot(p, r, CGColor(red: t.0, green: t.1, blue: t.2, alpha: 0.18 + b * 0.82))
+        }
+        return ctx.makeImage()
+    }()
+
+    /// Near-black ground: lifted a touch under the dome, fading out to nothing past its rim.
+    private static let groundTexture: CGImage? = {
+        let side = 1024
+        guard let ctx = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+                CGColor(red: 0.05, green: 0.055, blue: 0.065, alpha: 0.95), CGColor(red: 0.02, green: 0.022, blue: 0.03, alpha: 0.9),
+                CGColor(red: 0, green: 0, blue: 0, alpha: 0.6), CGColor(red: 0, green: 0, blue: 0, alpha: 0)] as CFArray,
+                locations: [0, 0.3, 0.6, 1]) else { return nil }
+        let c = CGPoint(x: side / 2, y: side / 2)
+        ctx.drawRadialGradient(gradient, startCenter: c, startRadius: 0, endCenter: c, endRadius: CGFloat(side) / 2, options: [])
+        return ctx.makeImage()
+    }()
 
     private func buildGround() {
         // A pool of light on the ground, brightest under the dish and gone by the horizon.
@@ -921,5 +1060,21 @@ struct DomeView: NSViewRepresentable {
     func updateNSView(_ view: OrbitView, context: Context) {
         context.coordinator.update(map: map, alignment: alignment)
         context.coordinator.update(sky: sky)
+    }
+}
+
+/// Small deterministic generator, so procedural scenery comes out the same every time.
+struct SeededRandom {
+    private var state: UInt64
+    init(seed: UInt64) { state = seed }
+    /// Uniform in 0..<1.
+    mutating func next() -> Double {
+        state = state &* 6364136223846793005 &+ 1442695040888963407
+        return Double(state >> 11) / Double(1 << 53)
+    }
+    /// Standard normal, by Box-Muller.
+    mutating func gaussian() -> Double {
+        let u = max(next(), 1e-9), v = next()
+        return (-2 * log(u)).squareRoot() * cos(2 * .pi * v)
     }
 }
