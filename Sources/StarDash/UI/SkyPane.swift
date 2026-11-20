@@ -48,6 +48,7 @@ struct SkyPane: View {
     private var style: SkyStyle { SkyStyle(rawValue: styleName) ?? .dome }
 
     @AppStorage("skySatellites") private var showSatellites = true
+    @AppStorage("skyDomeMap") private var showDomeMap = true
     /// Which recorded frame of the map is on screen. Nil means the live map.
     @State private var frame: Int?
     @State private var playing = false
@@ -73,7 +74,7 @@ struct SkyPane: View {
                 Group {
                     switch style {
                     case .dome:
-                        DomeView(map: map, alignment: alignment, sky: sky)
+                        DomeView(map: map, alignment: alignment, sky: sky, showMap: showDomeMap)
                     case .radar:
                         RadarSky(map: map, alignment: alignment, sky: sky)
                             .padding(.top, 120).padding(.bottom, lapse ? 96 : 56).padding(.horizontal, 28)
@@ -101,6 +102,12 @@ struct SkyPane: View {
                         .toggleStyle(ThemedSwitch())
                         .font(.system(size: 11.5))
                         .foregroundStyle(.white.opacity(0.7))
+                    if style == .dome {
+                        Toggle("Sky map", isOn: $showDomeMap)
+                            .toggleStyle(ThemedSwitch())
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.white.opacity(0.7))
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.trailing, 24).padding(.top, 44)
@@ -112,8 +119,10 @@ struct SkyPane: View {
                             .padding(.horizontal, 28)
                     }
                     HStack(spacing: 16) {
-                        legend(Palette.accent, "Clear")
-                        legend(Palette.bad, "Obstructed")
+                        if style != .dome || showDomeMap {
+                            legend(Palette.accent, "Clear")
+                            legend(Palette.bad, "Obstructed")
+                        }
                         if live {
                             legend(Palette.link, "Likely connected")
                             legend(.white, "Satellite · hover for its name")

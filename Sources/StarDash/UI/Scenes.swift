@@ -477,6 +477,8 @@ final class DomeScene {
     private var maxTheta = 80.0
     private var domeNode: SCNNode?
     private var shellNode: SCNNode?
+    /// The sky map, its glass and its grid, so they can be hidden together.
+    private let mapLayer = SCNNode()
     private let satellites = SCNNode()
     private var satellitePool: [SCNNode] = []
     private let tails = SCNNode()
@@ -520,6 +522,7 @@ final class DomeScene {
         rimNode.eulerAngles = SCNVector3(-0.4, .pi, 0)
         scene.rootNode.addChildNode(rimNode)
 
+        turntable.addChildNode(mapLayer)
         buildSpace()
         buildGround()
         buildGrid()
@@ -688,8 +691,8 @@ final class DomeScene {
         link.simdScale = [1, simd_length(span), 1]
     }
 
-    /// Space around everything: stars and the Milky Way on a far sphere, a faint airglow along the horizon,
-    /// and a patch of dark ground under the dome. All on the turntable, so the sky turns with the dome.
+    /// The world around the dish: night sky on a far sphere, dark land running out to a hazy horizon,
+    /// and a line of distant hills. All on the turntable, so it turns with the dome.
     private func buildSpace() {
         let sphere = SCNSphere(radius: 30)
         sphere.segmentCount = 72
@@ -703,59 +706,45 @@ final class DomeScene {
         sky.renderingOrder = -20
         turntable.addChildNode(sky)
 
-        // Airglow: a hemisphere just inside the dome, blue at the horizon and gone by the zenith.
-        var vertices: [SCNVector3] = [], colors: [SCNVector3] = [], indices: [Int32] = []
-        let azSteps = 72, elSteps = 24
-        for e in 0...elSteps {
-            let elevation = Double(e) / Double(elSteps) * 90
-            let f = Float(pow(1 - elevation / 90, 10)) * 0.28
-            for a in 0...azSteps {
-                vertices.append(SCNVector3(SceneKitHelpers.skyDirection(azimuth: Double(a) / Double(azSteps) * 360, elevation: elevation) * 0.995))
-                colors.append(SCNVector3(0.10 * f, 0.22 * f, 0.50 * f))
-            }
-        }
-        let row = Int32(azSteps + 1)
-        for e in 0..<Int32(elSteps) {
-            for a in 0..<Int32(azSteps) {
-                let i = e * row + a
-                indices += [i, i + 1, i + row, i + 1, i + row + 1, i + row]
-            }
-        }
-        let glow = SCNGeometry(sources: [SCNGeometrySource(vertices: vertices),
-                                         SCNGeometrySource(data: Data(bytes: colors, count: colors.count * MemoryLayout<SCNVector3>.stride),
-                                                           semantic: .color, vectorCount: colors.count, usesFloatComponents: true,
-                                                           componentsPerVector: 3, bytesPerComponent: MemoryLayout<CGFloat>.size,
-                                                           dataOffset: 0, dataStride: MemoryLayout<SCNVector3>.stride)],
-                               elements: [SCNGeometryElement(indices: indices, primitiveType: .triangles)])
-        let air = SceneKitHelpers.glow(.white)
-        air.readsFromDepthBuffer = false
-        glow.firstMaterial = air
-        let airNode = SCNNode(geometry: glow)
-        airNode.renderingOrder = 8
-        turntable.addChildNode(airNode)
-
-        // Dark ground out to the horizon, fading so its edge never shows.
-        let land = SCNPlane(width: 3.4, height: 3.4)
+        let land = SCNPlane(width: 56, height: 56)
         let landMaterial = SceneKitHelpers.flat(.white)
         landMaterial.diffuse.contents = Self.groundTexture
+        landMaterial.diffuse.mipFilter = .linear
         landMaterial.writesToDepthBuffer = false
         land.firstMaterial = landMaterial
         let landNode = SCNNode(geometry: land)
         landNode.eulerAngles.x = -.pi / 2
         landNode.position.y = -0.004
-        landNode.renderingOrder = -3
+        landNode.renderingOrder = -6
         turntable.addChildNode(landNode)
+
+        let hills = SCNCylinder(radius: 26, height: 1.6)
+        hills.radialSegmentCount = 128
+        let ridge = SceneKitHelpers.flat(.white)
+        ridge.diffuse.contents = Self.hillsTexture
+        ridge.writesToDepthBuffer = false
+        let none = SceneKitHelpers.flat(.clear)
+        none.transparency = 0
+        hills.materials = [ridge, none, none]
+        let hillsNode = SCNNode(geometry: hills)
+        hillsNode.position.y = 0.5
+        hillsNode.renderingOrder = -5
+        turntable.addChildNode(hillsNode)
     }
 
+    /// Night haze at the horizon. The far ground fades into it and the sky rises out of it.
+    private static let haze = (r: 0.075, g: 0.095, b: 0.14)
+
     /// Stars on an equirectangular map: thousands of points of mixed brightness and colour, and a denser,
-    /// cloudy band for the Milky Way. Seeded, so it's the same sky every launch.
+    /// cloudy band for the Milky Way. Haze is laid over the bottom of the sky, so stars dim toward the
+    /// horizon as they do through real air. Seeded, so it's the same sky every launch.
     private static let starTexture: CGImage? = {
         let w = 4096, h = 2048
         guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
-        ctx.setFillColor(CGColor(red: 0, green: 0, blue: 0, alpha: 1))
+        ctx.setFillColor(CGColor(red: 0.004, green: 0.006, blue: 0.014, alpha: 1))
         ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-        // y = h/2 is the horizon; north (the zenith side) is up.
+        // y = h/2 is the horizon; the zenith side is up.
         let horizon = CGFloat(h) / 2
         var rng = SeededRandom(seed: 0x5DA5)
         func point(lat: Double, lon: Double) -> CGPoint {
@@ -809,20 +798,69 @@ final class DomeScene {
             }
             dot(p, r, CGColor(red: t.0, green: t.1, blue: t.2, alpha: 0.18 + b * 0.82))
         }
+        // Haze: solid below the horizon, thinning out over the first 35 degrees of sky.
+        let hz = haze
+        ctx.setFillColor(CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: CGFloat(w), height: horizon))
+        if let air = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+            CGColor(red: hz.r * 1.15, green: hz.g * 1.15, blue: hz.b * 1.15, alpha: 1),
+            CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 0.7),
+            CGColor(red: hz.r * 0.6, green: hz.g * 0.6, blue: hz.b * 0.8, alpha: 0.25),
+            CGColor(red: 0, green: 0, blue: 0.02, alpha: 0)] as CFArray, locations: [0, 0.04, 0.16, 0.4]) {
+            ctx.drawLinearGradient(air, start: CGPoint(x: 0, y: horizon), end: CGPoint(x: 0, y: CGFloat(h)), options: [])
+        }
         return ctx.makeImage()
     }()
 
-    /// Near-black ground: lifted a touch under the dome, fading out to nothing past its rim.
+    /// Dark land with faint patches, fading into the horizon haze with distance.
     private static let groundTexture: CGImage? = {
-        let side = 1024
+        let side = 2048
         guard let ctx = CGContext(data: nil, width: side, height: side, bitsPerComponent: 8, bytesPerRow: 0,
-                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
-              let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
-                CGColor(red: 0.05, green: 0.055, blue: 0.065, alpha: 0.95), CGColor(red: 0.02, green: 0.022, blue: 0.03, alpha: 0.9),
-                CGColor(red: 0, green: 0, blue: 0, alpha: 0.6), CGColor(red: 0, green: 0, blue: 0, alpha: 0)] as CFArray,
-                locations: [0, 0.3, 0.6, 1]) else { return nil }
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         let c = CGPoint(x: side / 2, y: side / 2)
-        ctx.drawRadialGradient(gradient, startCenter: c, startRadius: 0, endCenter: c, endRadius: CGFloat(side) / 2, options: [])
+        ctx.setFillColor(CGColor(red: 0.022, green: 0.025, blue: 0.03, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: side, height: side))
+        var rng = SeededRandom(seed: 0x6E0)
+        for _ in 0..<5000 {
+            let p = CGPoint(x: rng.next() * Double(side), y: rng.next() * Double(side))
+            let r = CGFloat(3 + rng.next() * 26)
+            let shade = rng.next() < 0.5 ? 0.0 : 0.09
+            ctx.setFillColor(CGColor(red: shade, green: shade * 1.05, blue: shade * 1.1, alpha: 0.05 + rng.next() * 0.05))
+            ctx.fillEllipse(in: CGRect(x: p.x - r, y: p.y - r * 0.7, width: r * 2, height: r * 1.4))
+        }
+        let hz = haze
+        if let fade = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: [
+            CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 0), CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 0.35),
+            CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 0.85), CGColor(red: hz.r, green: hz.g, blue: hz.b, alpha: 1)] as CFArray,
+            locations: [0.06, 0.3, 0.7, 0.95]) {
+            ctx.drawRadialGradient(fade, startCenter: c, startRadius: 0, endCenter: c, endRadius: CGFloat(side) / 2, options: [.drawsAfterEndLocation])
+        }
+        return ctx.makeImage()
+    }()
+
+    /// A ring of low hills on the horizon, dark against the haze.
+    private static let hillsTexture: CGImage? = {
+        let w = 4096, h = 256
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        var rng = SeededRandom(seed: 0x4111)
+        // Whole numbers of waves around the circle, so the ridge meets itself.
+        let waves = (0..<9).map { k in (freq: Double([2, 3, 5, 7, 11, 17, 29, 47, 83][k]), amp: [0.3, 0.25, 0.2, 0.14, 0.09, 0.05, 0.03, 0.018, 0.01][k], phase: rng.next() * 2 * .pi) }
+        let ground = 0.3 / 1.6 * Double(h)
+        let path = CGMutablePath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        for x in stride(from: 0, through: w, by: 2) {
+            let t = Double(x) / Double(w) * 2 * .pi
+            var v = 0.0
+            for wave in waves { v += wave.amp * sin(wave.freq * t + wave.phase) }
+            let height = max(0.05, 0.4 + v * 1.4) * 0.9 / 1.6 * Double(h)
+            path.addLine(to: CGPoint(x: Double(x), y: ground + height))
+        }
+        path.addLine(to: CGPoint(x: w, y: 0))
+        path.closeSubpath()
+        ctx.addPath(path)
+        ctx.setFillColor(CGColor(red: 0.03, green: 0.037, blue: 0.052, alpha: 1))
+        ctx.fillPath()
         return ctx.makeImage()
     }()
 
@@ -830,7 +868,7 @@ final class DomeScene {
         // A pool of light on the ground, brightest under the dish and gone by the horizon.
         let floor = SCNPlane(width: 2.2, height: 2.2)
         let floorMaterial = SceneKitHelpers.flat(.white)
-        floorMaterial.diffuse.contents = Self.radial(side: 512, stops: [(0, 0.08), (0.2, 0.035), (0.42, 0.01), (0.5, 0)])
+        floorMaterial.diffuse.contents = Self.radial(side: 512, stops: [(0, 0.05), (0.12, 0.022), (0.3, 0.006), (0.5, 0)])
         floorMaterial.writesToDepthBuffer = false
         floor.firstMaterial = floorMaterial
         let floorNode = SCNNode(geometry: floor)
@@ -864,13 +902,13 @@ final class DomeScene {
             let ring = stride(from: 0.0, to: 360.0, by: 3).map {
                 SCNVector3(SceneKitHelpers.skyDirection(azimuth: $0, elevation: elevation))
             }
-            turntable.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(ring, color: elevation == 0 ? NSColor(white: 1, alpha: 0.22) : faint, closed: true)))
+            mapLayer.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(ring, color: elevation == 0 ? NSColor(white: 1, alpha: 0.22) : faint, closed: true)))
         }
         for azimuth in stride(from: 0.0, to: 360.0, by: 45) {
             let arc = stride(from: 0.0, through: 90.0, by: 3).map {
                 SCNVector3(SceneKitHelpers.skyDirection(azimuth: azimuth, elevation: $0))
             }
-            turntable.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(arc, color: faint)))
+            mapLayer.addChildNode(SCNNode(geometry: SceneKitHelpers.polyline(arc, color: faint)))
         }
     }
 
@@ -938,7 +976,7 @@ final class DomeScene {
         geometry.firstMaterial = domeMaterial
         let node = SCNNode(geometry: geometry)
         node.renderingOrder = 10
-        turntable.addChildNode(node)
+        mapLayer.addChildNode(node)
         domeNode = node
 
         // A faint glass edge, so the hemisphere reads as a shape even where nothing is mapped.
@@ -955,8 +993,12 @@ final class DomeScene {
         glass.materials = [shell]
         let shellGeometryNode = SCNNode(geometry: glass)
         shellGeometryNode.renderingOrder = 9
-        turntable.addChildNode(shellGeometryNode)
+        mapLayer.addChildNode(shellGeometryNode)
         shellNode = shellGeometryNode
+    }
+
+    func setMapVisible(_ visible: Bool) {
+        mapLayer.isHidden = !visible
     }
 
     func update(map: ObstructionMap?, alignment: Alignment?) {
@@ -1040,6 +1082,7 @@ struct DomeView: NSViewRepresentable {
     var map: ObstructionMap?
     var alignment: Alignment?
     var sky = SkyOverlay()
+    var showMap = true
 
     func makeCoordinator() -> DomeScene { DomeScene() }
 
@@ -1052,7 +1095,7 @@ struct DomeView: NSViewRepresentable {
         }
         // Pulled back far enough that the whole horizon ring, and the satellites on it, sit clear of
         // the title above and the time-lapse bar below.
-        view.configure(target: [0, 0.22, 0], yaw: 0.35, pitch: 0.5, distance: 4.0,
+        view.configure(target: [0, 0.42, 0], yaw: 0.35, pitch: 0.17, distance: 4.0,
                        pitchRange: 0.06...1.5, distanceRange: 1.6...6.5)
         return view
     }
@@ -1060,6 +1103,7 @@ struct DomeView: NSViewRepresentable {
     func updateNSView(_ view: OrbitView, context: Context) {
         context.coordinator.update(map: map, alignment: alignment)
         context.coordinator.update(sky: sky)
+        context.coordinator.setMapVisible(showMap)
     }
 }
 
