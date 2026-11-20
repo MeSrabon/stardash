@@ -587,7 +587,7 @@ final class DomeScene {
         turntable.addChildNode(halo)
     }
 
-    /// Puts a craft on the dome for each satellite, with a short line toward where it's heading.
+    /// Puts a craft in the sky for each satellite, in its real direction from the dish.
     func update(sky: SkyOverlay) {
         while satellitePool.count < sky.satellites.count {
             let node = SCNNode(geometry: Self.craft)
@@ -1016,6 +1016,12 @@ final class DomeScene {
         material.diffuse.mipFilter = .linear
         material.writesToDepthBuffer = false
         plane.firstMaterial = material
+        // A satellite low behind the camera passes right by the lens. Closer than 4 units it
+        // shrinks with distance, so it never looks bigger on screen than one 4 units away.
+        plane.shaderModifiers = [.geometry: """
+        float d = length((scn_node.modelViewTransform * float4(0.0, 0.0, 0.0, 1.0)).xyz);
+        _geometry.position.xyz *= min(1.0, d / 4.0);
+        """]
         return plane
     }
 
