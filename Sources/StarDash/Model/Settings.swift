@@ -3,15 +3,15 @@ import Observation
 import ServiceManagement
 
 enum MenuBarItem: String, CaseIterable, Identifiable, Codable {
-    case latency, pingSuccess, throughput, power, obstruction, events, sparkline
+    case latency, throughput, data, power, obstruction, events, sparkline
 
     var id: String { rawValue }
 
     var label: String {
         switch self {
         case .latency: return "Latency"
-        case .pingSuccess: return "Ping success"
         case .throughput: return "Throughput"
+        case .data: return "Data today"
         case .power: return "Power draw"
         case .obstruction: return "Obstruction"
         case .events: return "Outages (last hour)"
@@ -41,6 +41,9 @@ final class Settings {
     var siteLatitude: Double { didSet { d.set(siteLatitude, forKey: "siteLatitude") } }
     var siteLongitude: Double { didSet { d.set(siteLongitude, forKey: "siteLongitude") } }
     var hasSite: Bool { didSet { d.set(hasSite, forKey: "hasSite") } }
+    /// Notifications stay quiet until this time, for when you know the link will be rough.
+    var alertsPausedUntil: Date? { didSet { d.set(alertsPausedUntil?.timeIntervalSince1970, forKey: "alertsPausedUntil") } }
+    var alertsPaused: Bool { (alertsPausedUntil ?? .distantPast) > Date() }
 
     func setSite(latitude: Double, longitude: Double) {
         guard (-90...90).contains(latitude), (-180...180).contains(longitude) else { return }
@@ -78,6 +81,8 @@ final class Settings {
         siteLatitude = d.double(forKey: "siteLatitude")
         siteLongitude = d.double(forKey: "siteLongitude")
         hasSite = d.bool(forKey: "hasSite")
+        let paused = d.double(forKey: "alertsPausedUntil")
+        alertsPausedUntil = paused > 0 ? Date(timeIntervalSince1970: paused) : nil
     }
 
     func toggle(_ item: MenuBarItem) {

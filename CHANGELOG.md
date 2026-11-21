@@ -4,6 +4,18 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 
 ## [Unreleased]
 
+### Added
+- The popover shows the last hour as a strip: latency as a line, outages as red marks.
+- A Today tile in the popover with data used since midnight, and the billing cycle total when signed in.
+- Quick actions in the popover: stow or unstow, restart the dish, and pause alerts for an hour.
+- Data today as a menu bar item.
+
+### Changed
+- The popover's Pings tile is gone, and so is Ping success in the menu bar. It sat at 100% nearly all the time.
+
+### Fixed
+- Demo mode no longer shows the real dish location in Settings.
+
 ## [0.3.0] - 2026-11-21
 
 ### Added

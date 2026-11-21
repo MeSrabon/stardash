@@ -68,6 +68,14 @@ enum Fmt {
         return f
     }()
 
+    /// "9:18 PM", for times that are obviously today.
+    static let shortClock: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
+
     /// Safe in a file name: "2026-11-19 0412".
     static let fileStamp: DateFormatter = {
         let f = DateFormatter()

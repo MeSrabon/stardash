@@ -51,7 +51,7 @@ final class Notifier {
     }
 
     private func post(_ title: String, _ body: String) {
-        guard available else { return }
+        guard available, !Settings.shared.alertsPaused else { return }
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body

@@ -5,6 +5,11 @@ import AppKit
 enum MenuBarRenderer {
     static let height: CGFloat = 22
 
+    /// Hours since local midnight, counting the current one.
+    static var hoursToday: Int {
+        Calendar.current.component(.hour, from: Date()) + 1
+    }
+
     @MainActor private enum Segment {
         case text(String)
         case stacked(String, String)
@@ -52,8 +57,9 @@ enum MenuBarRenderer {
                 switch item {
                 case .latency:
                     segments.append(.text(state.isUp ? Fmt.ms(dish.latencyMs) : Fmt.missing))
-                case .pingSuccess:
-                    segments.append(.text(Fmt.percent(store.stats(60).pingSuccess)))
+                case .data:
+                    let today = store.totals(Self.hoursToday)
+                    segments.append(.text(Fmt.data(today.down + today.up)))
                 case .throughput:
                     segments.append(.stacked(
                         "↑ " + Fmt.rate(dish.upBps, bytes: settings.useBytes),

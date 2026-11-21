@@ -59,7 +59,7 @@ struct SettingsPane: View {
                     HStack {
                         Kicker("Show in the menu bar")
                         Spacer()
-                        Text("Click to add or remove. The strip above is live.")
+                        Text("Click to add or remove. Turn them all off for just the icon.")
                             .font(.system(size: 11)).foregroundStyle(.white.opacity(0.35))
                     }
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 8)], alignment: .leading, spacing: 8) {
@@ -88,8 +88,8 @@ struct SettingsPane: View {
     private func icon(_ item: MenuBarItem) -> String {
         switch item {
         case .latency: return "timer"
-        case .pingSuccess: return "checkmark.circle"
         case .throughput: return "arrow.up.arrow.down"
+        case .data: return "internaldrive"
         case .power: return "bolt"
         case .obstruction: return "tree"
         case .events: return "exclamationmark.triangle"
@@ -361,14 +361,16 @@ struct AddressField: View {
     }
 }
 
-/// Latitude and longitude typed as one pair, such as "23.81, 90.41".
+/// Latitude and longitude typed as one pair, such as "47.60, -122.30".
 private struct SiteField: View {
-    @State private var text = Settings.shared.hasSite
-        ? String(format: "%.2f, %.2f", Settings.shared.siteLatitude, Settings.shared.siteLongitude) : ""
+    @State private var text = Demo.on ? String(format: "%.2f, %.2f", Demo.site.latitude, Demo.site.longitude)
+        : Settings.shared.hasSite ? String(format: "%.2f, %.2f", Settings.shared.siteLatitude, Settings.shared.siteLongitude) : ""
 
     var body: some View {
-        AddressField(placeholder: "23.81, 90.41", text: $text)
+        AddressField(placeholder: "47.60, -122.30", text: $text)
             .onChange(of: text) { _, value in
+                // Demo mode shows a stand-in location and never saves over the real one.
+                guard !Demo.on else { return }
                 let parts = value.split(whereSeparator: { $0 == "," || $0 == " " }).compactMap { Double($0) }
                 if parts.count == 2 {
                     Settings.shared.setSite(latitude: parts[0], longitude: parts[1])
@@ -378,7 +380,7 @@ private struct SiteField: View {
             }
             .onChange(of: Settings.shared.hasSite) { _, has in
                 // Filled in from elsewhere, such as the Sky page's "use this Mac's location".
-                if has, text.isEmpty { text = String(format: "%.2f, %.2f", Settings.shared.siteLatitude, Settings.shared.siteLongitude) }
+                if has, text.isEmpty, !Demo.on { text = String(format: "%.2f, %.2f", Settings.shared.siteLatitude, Settings.shared.siteLongitude) }
             }
     }
 }
