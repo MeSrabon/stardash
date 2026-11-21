@@ -1,0 +1,30 @@
+# StarDash
+
+> StarDash is a free, open-source (MIT) macOS menu bar app for Starlink. It reads live stats straight from the dish and router over the local network, with no account needed.
+
+StarDash runs on macOS 14 or later, on a Mac connected to a Starlink network. It talks to the dish at 192.168.100.1 and the Starlink router at 192.168.1.1 using the same local interface the Starlink app uses.
+
+What it shows:
+
+- Download and upload speed, latency, packet loss and power draw, in the menu bar and a popover.
+- The last hour of latency and outages, plus data used today.
+- The dish's obstruction map as a flat chart, a horizon view and a 3D night-sky dome with a time-lapse.
+- Starlink satellites overhead, computed from public orbit data (CelesTrak), with the one the dish is most likely using highlighted.
+- Outage and event history, kept between launches.
+- Devices on the network with vendor, signal and traffic, plus mesh nodes.
+- Speed tests from the Mac and from the router.
+- Dish controls: snow melt, sleep schedule, update window, obstruction map reset, stow and reboot.
+- Optional notifications for outages, dish alerts and pending firmware reboots.
+
+Signing in with a Starlink account is optional. It adds billing usage, router Wi-Fi and DNS settings, and per-device network rules. The session is stored in the macOS keychain.
+
+Privacy: everything is local first. The only outside requests are orbit data from CelesTrak, MAC vendor lookups from IEEE, speed tests to Cloudflare, and starlink.com when signed in. There is no analytics or telemetry.
+
+StarDash is not affiliated with Starlink or SpaceX.
+
+## Links
+
+- [Download StarDash.dmg](https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg): the latest release, an unsigned DMG.
+- [Source code](https://github.com/sarequl/stardash): Swift and SwiftUI, MIT licensed.
+- [README](https://github.com/sarequl/stardash/blob/main/README.md): install steps and full feature list.
+- [Changelog](https://github.com/sarequl/stardash/blob/main/CHANGELOG.md): what changed in each version.
