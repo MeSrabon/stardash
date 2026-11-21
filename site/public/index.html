@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StarDash · Starlink monitor for macOS</title>
+<meta name="description" content="A free, open-source macOS menu bar app for your Starlink dish. Live speed, latency, outages, the obstruction map and the satellites overhead, read straight from your dish over the local network.">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/icon.svg" type="image/svg+xml">
+<meta property="og:title" content="StarDash">
+<meta property="og:description" content="Your Starlink dish, in your menu bar. Free and open source for macOS.">
+<meta property="og:image" content="https://stardash.nixify.app/img/sky.jpg">
+<meta property="og:url" content="https://stardash.nixify.app">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+  :root {
+    --bg: #000;
+    --panel: #0b0b0c;
+    --line: #1f1f22;
+    --line-2: #2b2b30;
+    --text: #f4f4f5;
+    --muted: #9a9aa2;
+    --dim: #63636b;
+    --link: #ffc847;
+    --good: #34d399;
+    --max: 1120px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  img { display: block; max-width: 100%; height: auto; }
+  .wrap { max-width: var(--max); margin: 0 auto; padding: 0 24px; }
+  .caps { text-transform: uppercase; letter-spacing: .22em; font-size: 12px; font-weight: 600; color: var(--muted); }
+
+  /* Night sky behind the top of the page. */
+  .sky {
+    position: absolute; inset: 0 0 auto 0; height: 980px; z-index: -1; overflow: hidden;
+    background:
+      radial-gradient(1200px 520px at 50% -120px, rgba(120,140,190,.16), transparent 70%),
+      radial-gradient(800px 400px at 85% 10%, rgba(90,100,150,.10), transparent 70%);
+  }
+  .sky::before, .sky::after {
+    content: ""; position: absolute; inset: 0;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, #fff8, transparent 60%),
+      radial-gradient(1px 1px at 22% 62%, #fff6, transparent 60%),
+      radial-gradient(1.4px 1.4px at 31% 14%, #fffa, transparent 60%),
+      radial-gradient(1px 1px at 44% 40%, #fff5, transparent 60%),
+      radial-gradient(1px 1px at 57% 8%, #fff8, transparent 60%),
+      radial-gradient(1.3px 1.3px at 66% 33%, #fff9, transparent 60%),
+      radial-gradient(1px 1px at 78% 18%, #fff6, transparent 60%),
+      radial-gradient(1px 1px at 88% 52%, #fff5, transparent 60%),
+      radial-gradient(1.2px 1.2px at 93% 9%, #fff8, transparent 60%),
+      radial-gradient(1px 1px at 5% 48%, #fff5, transparent 60%);
+    background-size: 600px 420px;
+    mask-image: linear-gradient(#000 30%, transparent 85%);
+    -webkit-mask-image: linear-gradient(#000 30%, transparent 85%);
+  }
+  .sky::after { background-size: 420px 300px; background-position: 130px 70px; opacity: .6; }
+
+  /* Header */
+  header { position: sticky; top: 0; z-index: 10; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: rgba(0,0,0,.55); border-bottom: 1px solid transparent; transition: border-color .2s; }
+  header.scrolled { border-bottom-color: var(--line); }
+  .bar { display: flex; align-items: center; gap: 28px; height: 64px; }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .brand img { width: 28px; height: 28px; border-radius: 7px; }
+  .brand span { letter-spacing: .32em; font-weight: 600; font-size: 14px; }
+  nav { display: flex; gap: 24px; margin-left: auto; }
+  nav a { text-decoration: none; color: var(--muted); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; font-weight: 600; }
+  nav a:hover { color: var(--text); }
+
+  .btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 22px; border-radius: 10px;
+    text-decoration: none; font-weight: 600; font-size: 15px; transition: transform .15s, background .15s, border-color .15s; }
+  .btn:active { transform: translateY(1px); }
+  .btn.primary { background: #fff; color: #000; }
+  .btn.primary:hover { background: #e7e7ea; }
+  .btn.ghost { border: 1px solid var(--line-2); color: var(--text); }
+  .btn.ghost:hover { border-color: #4a4a52; }
+  .btn.small { padding: 8px 14px; font-size: 13px; border-radius: 8px; }
+  .btn svg { width: 17px; height: 17px; }
+
+  /* Hero */
+  .hero { text-align: center; padding: 96px 0 0; }
+  .hero .icon { width: 84px; height: 84px; margin: 0 auto 28px; border-radius: 19px;
+    box-shadow: 0 0 0 1px #ffffff14, 0 20px 60px -10px rgba(140,160,220,.35); }
+  h1 { font-size: clamp(40px, 6.4vw, 72px); line-height: 1.03; letter-spacing: -.035em; margin: 0 auto 22px; max-width: 14ch; font-weight: 700; }
+  .lede { color: var(--muted); font-size: clamp(17px, 2vw, 20px); max-width: 600px; margin: 0 auto 36px; }
+  .ctas { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .meta { margin-top: 18px; color: var(--dim); font-size: 13px; }
+
+  .shot { position: relative; margin: 72px auto 0; max-width: 1060px; }
+  .shot::before { content: ""; position: absolute; inset: 8% 6% -4%; z-index: -1;
+    background: radial-gradient(closest-side, rgba(130,150,210,.28), transparent); filter: blur(40px); }
+  .window { border-radius: 14px; overflow: hidden; border: 1px solid #ffffff1c; background: #000;
+    box-shadow: 0 40px 120px -20px rgba(0,0,0,.9), 0 0 0 1px #000; }
+  .window .chrome { height: 30px; display: flex; align-items: center; gap: 7px; padding: 0 12px; background: #0e0e10; border-bottom: 1px solid #ffffff10; }
+  .window .chrome i { width: 11px; height: 11px; border-radius: 50%; background: #3a3a40; }
+
+  /* Sections */
+  section { padding: 120px 0 0; }
+  .head { max-width: 640px; margin-bottom: 48px; }
+  .head h2 { font-size: clamp(30px, 4vw, 44px); line-height: 1.1; letter-spacing: -.025em; margin: 14px 0 14px; }
+  .head p { color: var(--muted); margin: 0; font-size: 17px; }
+
+  .split { display: grid; grid-template-columns: 1fr 380px; gap: 64px; align-items: center; }
+  .popover { border-radius: 16px; overflow: hidden; border: 1px solid #ffffff1c; box-shadow: 0 30px 90px -20px rgba(0,0,0,.9); max-width: 380px; justify-self: end; }
+  .menubar { display: inline-flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 9px; background: #1a1a1d;
+    border: 1px solid var(--line-2); font: 500 14px var(--font); margin: 8px 0 26px; font-variant-numeric: tabular-nums; }
+  .menubar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
+  .menubar img { width: 17px; height: 17px; }
+  .menubar .stack { display: grid; font-size: 10px; line-height: 1.15; font-weight: 600; }
+  ul.ticks { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; color: var(--muted); }
+  ul.ticks li { padding-left: 22px; position: relative; }
+  ul.ticks li::before { content: ""; position: absolute; left: 2px; top: .62em; width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #fff; }
+  ul.ticks b { color: var(--text); font-weight: 600; }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .card { background: var(--panel); padding: 30px 28px 32px; }
+  .card svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 18px; }
+  .card h3 { margin: 0 0 8px; font-size: 17px; letter-spacing: -.01em; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+
+  .gallery { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+  .gallery figure { margin: 0; }
+  .gallery figcaption { margin-top: 12px; color: var(--muted); font-size: 14px; }
+  .gallery .window { border-radius: 12px; }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 18px; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { border: 1px solid var(--line); border-radius: 16px; padding: 36px; background: var(--panel); }
+  .panel h3 { margin: 12px 0 12px; font-size: 24px; letter-spacing: -.02em; }
+  .panel p { color: var(--muted); margin: 0 0 14px; }
+  .panel p:last-child { margin-bottom: 0; }
+  .pill { display: inline-block; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700;
+    padding: 4px 10px; border-radius: 99px; border: 1px solid var(--line-2); color: var(--muted); }
+
+  ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  ol.steps li { counter-increment: s; border-top: 1px solid var(--line-2); padding-top: 22px; color: var(--muted); }
+  ol.steps li::before { content: "0" counter(s); display: block; font: 600 13px var(--mono); color: var(--text); margin-bottom: 10px; }
+  ol.steps b { color: var(--text); display: block; margin-bottom: 4px; font-weight: 600; }
+  .note { margin-top: 28px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+  code { font: 13px var(--mono); background: #141417; border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
+
+  .final { text-align: center; padding: 140px 0 120px; }
+  .final h2 { font-size: clamp(32px, 4.6vw, 52px); letter-spacing: -.03em; line-height: 1.08; margin: 0 0 30px; }
+
+  footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--dim); font-size: 13px; }
+  footer .row { display: flex; gap: 24px; justify-content: space-between; flex-wrap: wrap; }
+  footer a { color: var(--muted); text-decoration: none; }
+  footer a:hover { color: var(--text); }
+
+  .reveal { opacity: 0; transform: translateY(14px); transition: opacity .7s ease, transform .7s ease; }
+  .reveal.in { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) { .reveal { opacity: 1; transform: none; transition: none; } html { scroll-behavior: auto; } }
+
+  @media (max-width: 900px) {
+    .split { grid-template-columns: 1fr; gap: 40px; }
+    .popover { justify-self: center; }
+    .grid { grid-template-columns: 1fr 1fr; }
+    .two, ol.steps { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 640px) {
+    .wrap { padding: 0 16px; }
+    nav { display: none; }
+    .bar .btn { margin-left: auto; }
+    .hero { padding-top: 64px; }
+    section { padding-top: 88px; }
+    .grid, .gallery { grid-template-columns: 1fr; }
+    .panel { padding: 26px; }
+    .window .chrome { height: 22px; }
+    .window .chrome i { width: 8px; height: 8px; }
+  }
+</style>
+</head>
+<body>
+<div class="sky" aria-hidden="true"></div>
+
+<header id="top">
+  <div class="wrap bar">
+    <a class="brand" href="#"><img src="/icon.svg" alt=""><span>STARDASH</span></a>
+    <nav>
+      <a href="#features">Features</a>
+      <a href="#privacy">Privacy</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/sarequl/stardash">GitHub</a>
+    </nav>
+    <a class="btn primary small dl" href="https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg">Download</a>
+  </div>
+</header>
+
+<main>
+  <div class="wrap hero">
+    <img class="icon" src="/icon.svg" alt="StarDash icon" width="84" height="84">
+    <h1>Your Starlink dish, in&nbsp;your menu bar.</h1>
+    <p class="lede">A native macOS app that reads your dish and router over the local network. Speed, latency, outages, the obstruction map and the satellites overhead, live.</p>
+    <div class="ctas">
+      <a class="btn primary dl" href="https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.77-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
+        Download for macOS
+      </a>
+      <a class="btn ghost" href="https://github.com/sarequl/stardash">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.52-1.33-1.28-1.69-1.28-1.69-1.05-.71.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+        Source on GitHub
+      </a>
+    </div>
+    <p class="meta">Free and open source · macOS 14 or later · No account needed</p>
+
+    <div class="shot reveal">
+      <div class="window">
+        <div class="chrome"><i></i><i></i><i></i></div>
+        <img src="/img/sky.jpg" width="1280" height="820" alt="The Sky page: a 3D dome of the dish's obstruction map under a night sky, with Starlink satellites overhead and a beam to the one the dish is likely using.">
+      </div>
+    </div>
+  </div>
+
+  <section id="menubar">
+    <div class="wrap split">
+      <div class="reveal">
+        <div class="caps">Menu bar</div>
+        <div class="head" style="margin-bottom:0">
+          <h2>Everything at a glance. Nothing in the way.</h2>
+          <p>Pick what sits next to the clock: latency, throughput, power draw, obstruction, outages or a latency sparkline. Click for the full picture.</p>
+        </div>
+        <div class="menubar" aria-label="Example menu bar readout">
+          <span class="dot"></span><img src="/glyph.svg" alt=""><span>18 ms</span>
+          <span class="stack"><span>↑ 12.4 Mbps</span><span>↓ 186 Mbps</span></span>
+        </div>
+        <ul class="ticks">
+          <li><b>Live numbers</b>, refreshed every second while you're looking.</li>
+          <li><b>Outage alerts</b> when the link drops and again when it's back, with short blips filtered out.</li>
+          <li><b>A health score</b> that sums up the last few minutes in one number.</li>
+        </ul>
+      </div>
+      <img class="popover reveal" src="/img/popover.jpg" width="380" height="540" alt="The StarDash popover with download and upload speed, latency, pings, power and a small sky chart." loading="lazy">
+    </div>
+  </section>
+
+  <section id="features">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="caps">Features</div>
+        <h2>What the Starlink app doesn't show you.</h2>
+        <p>StarDash talks to the same local API as the official app and keeps a history the dish forgets.</p>
+      </div>
+      <div class="grid reveal">
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg>
+          <h3>Speed and latency</h3>
+          <p>Throughput, latency, packet loss and power over time, and how latency is spread for the dish and the router.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M3 18a9 9 0 0 1 18 0"/><path d="M7 18a5 5 0 0 1 10 0"/><circle cx="12" cy="18" r="1"/></svg>
+          <h3>Obstruction map</h3>
+          <p>As a flat chart, a horizon view and a 3D dome, with a time-lapse of how it filled in and a one-click reset.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 24 24"><g transform="rotate(-35 12 12)"><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><rect x="1.5" y="10" width="6" height="4" rx=".6"/><rect x="16.5" y="10" width="6" height="4" rx=".6"/><path d="M7.5 12h2M14.5 12h2"/></g></svg>
+          <h3>Satellites overhead</h3>
+          <p>Every Starlink satellite in view, computed from public orbit data, and the one your dish is most likely using.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M12 3v3M12 18v3M4 12H2M22 12h-2"/><circle cx="12" cy="12" r="6"/><path d="M12 9v3l2 1"/></svg>
+          <h3>Outage history</h3>
+          <p>Every drop and alert with its cause, kept between launches, plus public IP changes.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19" r="1"/></svg>
+          <h3>Network devices</h3>
+          <p>Everything on your Wi-Fi with its vendor, signal and traffic, plus mesh nodes and band switches.</p>
+        </div>
+        <div class="card">
+          <svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>
+          <h3>Dish controls</h3>
+          <p>Snow melt, sleep schedule, update time, stow, reboot and factory reset, each behind a confirm.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screens">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="caps">Screens</div>
+        <h2>A full window when you want to dig in.</h2>
+      </div>
+      <div class="gallery">
+        <figure class="reveal"><div class="window"><img src="/img/dashboard.jpg" width="1280" height="820" alt="Dashboard" loading="lazy"></div><figcaption>Dashboard: live throughput, latency and the day so far.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="/img/speed.jpg" width="1280" height="820" alt="Speed test" loading="lazy"></div><figcaption>Speed tests from the Mac and the router, with the route they take.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="/img/network.jpg" width="1280" height="820" alt="Network devices" loading="lazy"></div><figcaption>Network: every device, its signal and traffic.</figcaption></figure>
+        <figure class="reveal"><div class="window"><img src="/img/events.jpg" width="1280" height="820" alt="Outages and events" loading="lazy"></div><figcaption>Events: outages and alerts over time.</figcaption></figure>
+      </div>
+    </div>
+  </section>
+
+  <section id="privacy">
+    <div class="wrap two">
+      <div class="panel reveal">
+        <span class="pill">Local first</span>
+        <h3>Your data stays on your Mac.</h3>
+        <p>StarDash reads the dish at <code>192.168.100.1</code> and the router at <code>192.168.1.1</code> over your own network. No servers, no analytics, no sign-up.</p>
+        <p>Beyond your network it only downloads public data: satellite orbits from CelesTrak and the device vendor list from the IEEE. Speed tests run against Cloudflare, and only when you start one.</p>
+      </div>
+      <div class="panel reveal">
+        <span class="pill">Optional</span>
+        <h3>Sign in for more.</h3>
+        <p>Signing in to your Starlink account adds billing usage, router settings (Wi-Fi name, password and DNS) and network rules for data limits, online hours and pause timers.</p>
+        <p>The session is kept in your keychain, and StarDash only contacts starlink.com for these features. Sign out and it's gone.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="install">
+    <div class="wrap">
+      <div class="head reveal">
+        <div class="caps">Install</div>
+        <h2>Up and running in a minute.</h2>
+      </div>
+      <ol class="steps reveal">
+        <li><b>Download</b>Get the latest <a href="https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg" class="dl">StarDash.dmg</a>.</li>
+        <li><b>Drag to Applications</b>Open the disk image and drag StarDash into Applications.</li>
+        <li><b>Open it</b>On the same network as your dish. It finds the dish and router by itself.</li>
+      </ol>
+      <p class="note reveal">Builds aren't notarized yet. If macOS says it can't verify the developer, open System Settings › Privacy &amp; Security and click Open Anyway, or run <code>xattr -dr com.apple.quarantine /Applications/StarDash.app</code>.</p>
+    </div>
+  </section>
+
+  <div class="wrap final reveal">
+    <h2>See what your dish sees.</h2>
+    <div class="ctas">
+      <a class="btn primary dl" href="https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg">Download for macOS</a>
+      <a class="btn ghost" href="https://github.com/sarequl/stardash/blob/main/CHANGELOG.md">What's new</a>
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap row">
+    <span>StarDash is independent and not affiliated with Starlink or SpaceX.</span>
+    <span><a href="https://github.com/sarequl/stardash">GitHub</a> · <a href="https://github.com/sarequl/stardash/releases">Releases</a> · <a href="https://github.com/sarequl/stardash/blob/main/LICENSE">MIT License</a></span>
+  </div>
+</footer>
+
+<script>
+  const header = document.getElementById('top');
+  addEventListener('scroll', () => header.classList.toggle('scrolled', scrollY > 8), { passive: true });
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
+    for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
+  }, { rootMargin: '0px 0px -8% 0px' }) : null;
+  document.querySelectorAll('.reveal').forEach((el) => io ? io.observe(el) : el.classList.add('in'));
+</script>
+</body>
+</html>

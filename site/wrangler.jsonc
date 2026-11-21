@@ -1,0 +1,13 @@
+// The StarDash landing page: static files only, served by Workers static assets.
+// Deploy from this folder with `npx wrangler deploy`.
+{
+  "name": "stardash-site",
+  "compatibility_date": "2025-09-01",
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "stardash.nixify.app", "custom_domain": true }
+  ]
+}
