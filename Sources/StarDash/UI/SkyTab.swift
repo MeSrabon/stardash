@@ -113,7 +113,7 @@ struct SkyTab: View {
                     .lineLimit(2)
             }
             Spacer()
-            Button("Reset map…") {
+            Button {
                 overlays.confirm = ConfirmRequest(
                     title: "Reset the obstruction map?",
                     message: "The dish forgets what it has learned about its view of the sky and starts again, which takes several hours. Worth doing after moving the dish or clearing an obstruction. The time-lapse starts over too.",
@@ -124,12 +124,11 @@ struct SkyTab: View {
                         resetNote = ok ? ("Map reset. It rebuilds over the next hours.", false) : ("That didn't go through.", true)
                     }
                 }
+            } label: {
+                Label("Reset map…", systemImage: "arrow.counterclockwise")
             }
-            .buttonStyle(.plain)
-            .font(.system(size: 11.5, weight: .medium))
-            .foregroundStyle(.secondary)
         }
-        .padding(.top, 4)
+        .padding(.top, 6)
     }
 }
 
