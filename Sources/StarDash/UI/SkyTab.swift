@@ -3,6 +3,8 @@ import SwiftUI
 struct SkyTab: View {
     @Environment(TelemetryStore.self) private var store
     @Environment(\.wideLayout) private var wide
+    @Environment(Overlays.self) private var overlays
+    @State private var resetNote: (text: String, failed: Bool)?
     var showMap = true
 
     var body: some View {
@@ -45,6 +47,7 @@ struct SkyTab: View {
                         Row("Typical interruption", "every \(Fmt.duration(interval)), for \(Fmt.duration(o?.avgProlongedDuration))")
                     }
                     Row("Measured over", o?.validSeconds.map { Fmt.duration($0) })
+                    if dish != nil { resetRow }
                 }
             }
 
@@ -98,6 +101,35 @@ struct SkyTab: View {
         }
         let text = steps.joined(separator: ", ")
         return (text.prefix(1).uppercased() + text.dropFirst() + " for the ideal view", false)
+    }
+
+    /// After moving the dish or clearing a tree, the old map is stale. Same confirm as on the Device page.
+    private var resetRow: some View {
+        HStack(spacing: 8) {
+            if let note = resetNote {
+                Text(note.text)
+                    .font(.system(size: 11))
+                    .foregroundStyle(note.failed ? Palette.bad : .secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Button("Reset map…") {
+                overlays.confirm = ConfirmRequest(
+                    title: "Reset the obstruction map?",
+                    message: "The dish forgets what it has learned about its view of the sky and starts again, which takes several hours. Worth doing after moving the dish or clearing an obstruction. The time-lapse starts over too.",
+                    action: "Reset map"
+                ) {
+                    Task {
+                        let ok = await store.clearObstructionMap()
+                        resetNote = ok ? ("Map reset. It rebuilds over the next hours.", false) : ("That didn't go through.", true)
+                    }
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(.secondary)
+        }
+        .padding(.top, 4)
     }
 }
 

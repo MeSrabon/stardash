@@ -4,6 +4,9 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 
 ## [Unreleased]
 
+### Added
+- A Reset map button on the Sky page, under Obstructions. It's the same reset as on the Device page.
+
 ### Changed
 - The 3D dome is now a night scene. The dish sits on the ground with hills on the horizon,
   under stars and the Milky Way, and the obstruction map shows as a dotted glass dome.
