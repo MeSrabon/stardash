@@ -4,6 +4,8 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-21
+
 ### Added
 - A Reset map button on the Sky page, under Obstructions. It's the same reset as on the Device page.
 
@@ -63,7 +65,8 @@ First release.
 - Dish controls: snow melt, sleep schedule, update time, map reset, stow and reboot.
 - Demo mode for screenshots that hides identifying details.
 
-[Unreleased]: https://github.com/sarequl/stardash/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/sarequl/stardash/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/sarequl/stardash/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sarequl/stardash/compare/v0.1.2...v0.2.0
 [0.1.2]: https://github.com/sarequl/stardash/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/sarequl/stardash/compare/v0.1.0...v0.1.1
