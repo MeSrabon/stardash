@@ -110,7 +110,7 @@
   .head p { color: var(--muted); margin: 0; font-size: 17px; }
 
   .split { display: grid; grid-template-columns: 1fr 380px; gap: 64px; align-items: center; }
-  .popover { border-radius: 16px; overflow: hidden; border: 1px solid #ffffff1c; box-shadow: 0 30px 90px -20px rgba(0,0,0,.9); max-width: 380px; justify-self: end; }
+  .popover { border-radius: 16px; overflow: hidden; border: 1px solid #ffffff1c; box-shadow: 0 30px 90px -20px rgba(0,0,0,.9); width: 100%; max-width: 380px; justify-self: end; }
   .menubar { display: inline-flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 9px; background: #1a1a1d;
     border: 1px solid var(--line-2); font: 500 14px var(--font); margin: 8px 0 26px; font-variant-numeric: tabular-nums; }
   .menubar .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); }
@@ -146,9 +146,10 @@
   ol.steps li::before { content: "0" counter(s); display: block; font: 600 13px var(--mono); color: var(--text); margin-bottom: 10px; }
   ol.steps b { color: var(--text); display: block; margin-bottom: 4px; font-weight: 600; }
   .note { margin-top: 28px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--line); color: var(--muted); font-size: 14px; }
-  code { font: 13px var(--mono); background: #141417; border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; color: var(--text); word-break: break-all; }
+  code { font: 13px var(--mono); background: #141417; border: 1px solid var(--line); padding: 2px 6px; border-radius: 6px; color: var(--text); overflow-wrap: anywhere; }
 
-  .final { text-align: center; padding: 140px 0 120px; }
+  .wrap.final { text-align: center; padding-top: 140px; padding-bottom: 120px; }
+  @media (max-width: 640px) { .wrap.final { padding-top: 100px; padding-bottom: 88px; } }
   .final h2 { font-size: clamp(32px, 4.6vw, 52px); letter-spacing: -.03em; line-height: 1.08; margin: 0 0 30px; }
 
   footer { border-top: 1px solid var(--line); padding: 36px 0 48px; color: var(--dim); font-size: 13px; }
@@ -352,7 +353,7 @@
   addEventListener('scroll', () => header.classList.toggle('scrolled', scrollY > 8), { passive: true });
   const io = 'IntersectionObserver' in window ? new IntersectionObserver((entries) => {
     for (const e of entries) if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); }
-  }, { rootMargin: '0px 0px -8% 0px' }) : null;
+  }, { rootMargin: '0px 0px -40px 0px' }) : null;
   document.querySelectorAll('.reveal').forEach((el) => io ? io.observe(el) : el.classList.add('in'));
 </script>
 </body>
