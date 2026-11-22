@@ -369,6 +369,9 @@ enum Snapshot {
         }
 
         await shoot("popover", PopoverRoot())
+        await shoot("popover-latency", PopoverRoot(detail: .latency))
+        await shoot("popover-data", PopoverRoot(detail: .data))
+        await shoot("popover-power", PopoverRoot(detail: .power))
         await shoot("settings", PopoverRoot())
         for pane in [Pane.overview, .speed, .sky, .network, .device, .events, .settings] {
             await shoot("window-\(pane.rawValue)", size: CGSize(width: 1080, height: 760), MainWindow(pane: pane))

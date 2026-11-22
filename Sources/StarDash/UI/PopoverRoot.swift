@@ -2,12 +2,18 @@ import SwiftUI
 
 /// What opens from the menu bar: one screen to glance at. Anything deeper lives in the main window.
 struct PopoverRoot: View {
-    static let size = CGSize(width: 380, height: 610)
+    static let size = CGSize(width: 380, height: 660)
 
     @Environment(TelemetryStore.self) private var store
     @Environment(SpeedTest.self) private var speedTest
     @Environment(AppActions.self) private var actions
     @State private var note: String?
+    /// The tile opened up into a 24-hour chart, shown where the sky card sits.
+    @State private var detail: PopoverDetail?
+
+    init(detail: PopoverDetail? = nil) {
+        _detail = State(initialValue: detail)
+    }
 
     var body: some View {
         let state = store.state
@@ -21,12 +27,20 @@ struct PopoverRoot: View {
             }
             lastHour
             HStack(spacing: 8) {
-                tile("Latency", state.isUp ? Fmt.ms(dish?.latencyMs) : Fmt.missing,
+                tile(.latency, state.isUp ? Fmt.ms(dish?.latencyMs) : Fmt.missing,
                      stats.medianLatency.map { String(format: "median %.0f ms", $0) })
                 dataTile
-                tile("Power", Fmt.watts(store.powerW), stats.avgPower.map { String(format: "avg %.0f W", $0) })
+                tile(.power, Fmt.watts(store.powerW), stats.avgPower.map { String(format: "avg %.0f W", $0) })
             }
-            sky(dish)
+            Group {
+                if let detail {
+                    DetailCard(kind: detail) { withAnimation(.snappy(duration: 0.22)) { self.detail = nil } }
+                        .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .top)))
+                } else {
+                    sky(dish).transition(.opacity)
+                }
+            }
+            .frame(height: 148)
             speedRow
             quickActions(dish)
             Spacer(minLength: 0)
@@ -89,10 +103,21 @@ struct PopoverRoot: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func tile(_ label: String, _ value: String, _ caption: String?) -> some View {
+    private func tile(_ kind: PopoverDetail, _ value: String, _ caption: String?) -> some View {
         let parts = splitUnit(value)
-        return VStack(alignment: .leading, spacing: 3) {
-            Kicker(label)
+        let open = detail == kind
+        return Button {
+            withAnimation(.snappy(duration: 0.22)) { detail = open ? nil : kind }
+        } label: {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 0) {
+                Kicker(kind.label)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 7.5, weight: .bold))
+                    .foregroundStyle(.white.opacity(open ? 0.8 : 0.3))
+                    .rotationEffect(.degrees(open ? 180 : 0))
+            }
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text(parts.0).font(Theme.number(19)).monospacedDigit()
                 Text(parts.1).font(.system(size: 10.5, weight: .medium)).foregroundStyle(.white.opacity(0.5))
@@ -103,8 +128,15 @@ struct PopoverRoot: View {
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panelFill, in: RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous))
+        .background(open ? .white.opacity(0.09) : Theme.panelFill, in: RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous).strokeBorder(Theme.panelStroke))
+        .overlay {
+            if open { RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous).strokeBorder(.white.opacity(0.45)) }
+        }
+        .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .help(open ? "Back to the sky" : "Show the last 24 hours")
     }
 
     /// The dish's view of the sky with the satellites in range, and what that view is like right now.
@@ -117,7 +149,7 @@ struct PopoverRoot: View {
         let inRange = overlay.satellites.filter { $0.elevation >= SkyWatch.serviceElevation }.count
         let obstructed = dish?.obstruction.currentlyObstructed == true
         return HStack(spacing: 14) {
-            RadarDots(map: store.map, alignment: dish?.alignment, compact: true, sky: overlay)
+            RadarDots(map: store.map, alignment: dish?.alignment, compact: true, sky: overlay, night: true)
                 .frame(width: 128, height: 128)
             VStack(alignment: .leading, spacing: 8) {
                 Kicker("Sky")
@@ -158,14 +190,60 @@ struct PopoverRoot: View {
             }
             LastHourStrip(samples: Array(store.window(3600)), outages: outages)
                 .frame(height: 34)
-            if let last = outages.first {
-                Text("Last: \(last.title) at \(Fmt.shortClock.string(from: last.start)), \(Fmt.duration(last.duration))")
-                    .font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.5)).lineLimit(1).monospacedDigit()
-            }
+            recentOutages
         }
         .padding(10)
         .background(Theme.panelFill, in: RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous))
         .overlay(RoundedRectangle(cornerRadius: Theme.r(12), style: .continuous).strokeBorder(Theme.panelStroke))
+    }
+
+    /// The last few outages of the day, so "did it drop while I was away?" needs no window.
+    private var recentOutages: some View {
+        // Sub-second blips are routine on Starlink and drown out the drops people notice.
+        let day = store.outages(since: 86_400).sorted { $0.start > $1.start }
+        let shown = day.filter { $0.duration >= 2 }.prefix(3)
+        return VStack(alignment: .leading, spacing: 4) {
+            Rectangle().fill(.white.opacity(0.07)).frame(height: 1).padding(.vertical, 2)
+            if shown.isEmpty {
+                Text(day.isEmpty ? "No outages in the last 24 hours" : "No outages over 2 s in the last 24 hours")
+                    .font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.45))
+            }
+            ForEach(Array(shown)) { o in
+                HStack(spacing: 8) {
+                    Circle().fill(Palette.bad.opacity(0.85)).frame(width: 5, height: 5)
+                    Text(Self.when(o.start))
+                        .frame(width: 92, alignment: .leading)
+                        .foregroundStyle(.white.opacity(0.55))
+                    Text(o.title).foregroundStyle(.white.opacity(0.8))
+                    Spacer(minLength: 4)
+                    Text(Fmt.duration(o.duration)).foregroundStyle(.white.opacity(0.55))
+                }
+                .font(.system(size: 10.5))
+                .lineLimit(1)
+                .monospacedDigit()
+            }
+            if day.count > shown.count {
+                Button { open(.events) } label: {
+                    Text("\(day.count - shown.count) more in 24 h, mostly brief blips")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.5))
+                }
+                .buttonStyle(.plain)
+                .help("Open Events")
+            }
+        }
+    }
+
+    /// "9:41 PM" for today, "Yesterday 11:02 PM" otherwise.
+    private static func when(_ date: Date) -> String {
+        let clock = Fmt.shortClock.string(from: date)
+        return Calendar.current.isDateInToday(date) ? clock : "Yest. \(clock)"
+    }
+
+    private func open(_ pane: Pane) {
+        actions.openMainWindow()
+        // A window that was just created needs a moment before it can be told which page to show.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [actions] in actions.showPane(pane) }
     }
 
     /// Data since midnight from the dish, and the billing cycle when signed in, since that's what a cap counts.
@@ -177,7 +255,7 @@ struct PopoverRoot: View {
                 ? String(format: "cycle %.0f GB", cycle.totalGB)
                 : String(format: "cycle %.0f of %.0f GB", cycle.totalGB, usage.limitGB ?? 0)
         }
-        return tile("Today", Fmt.data(today.down + today.up), caption)
+        return tile(.data, Fmt.data(today.down + today.up), caption)
     }
 
     private func quickActions(_ dish: DishStatus?) -> some View {
@@ -205,7 +283,7 @@ struct PopoverRoot: View {
                     ) { run("Restart sent. Back in a minute or two.") { await store.rebootDish() } }
                 }
                 .disabled(!reachable)
-                action(settings.alertsPaused ? "Resume alerts" : "Pause alerts",
+                action(settings.alertsPaused ? "Alerts on" : "Snooze 1 h",
                        icon: settings.alertsPaused ? "bell" : "bell.slash") {
                     settings.alertsPausedUntil = settings.alertsPaused ? nil : Date().addingTimeInterval(3600)
                 }
@@ -279,18 +357,24 @@ struct PopoverRoot: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(PressScale())
-            Button { actions.openSettings() } label: {
-                Image(systemName: "gearshape")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.85))
-                    .frame(width: 34, height: 34)
-                    .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: Theme.r(10), style: .continuous))
-                    .overlay(RoundedRectangle(cornerRadius: Theme.r(10), style: .continuous).strokeBorder(.white.opacity(0.12)))
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PressScale())
-            .help("Settings")
+            square("scope", "Open the Sky page") { open(.sky) }
+            square("speedometer", "Open the Speed page") { open(.speed) }
+            square("gearshape", "Settings") { actions.openSettings() }
         }
+    }
+
+    private func square(_ icon: String, _ help: String, _ perform: @escaping () -> Void) -> some View {
+        Button(action: perform) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.white.opacity(0.85))
+                .frame(width: 34, height: 34)
+                .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: Theme.r(10), style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Theme.r(10), style: .continuous).strokeBorder(.white.opacity(0.12)))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(PressScale())
+        .help(help)
     }
 }
 

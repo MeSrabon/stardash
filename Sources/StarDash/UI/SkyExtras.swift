@@ -57,6 +57,8 @@ struct SkyOverlay {
     var ahead: [Int: SkyPosition] = [:]
     /// The satellite to single out.
     var best: Int?
+    /// Night-sky look: satellites as small lit points with a soft glow.
+    var night = false
 
     /// Draws each satellite as a small craft turned across its path, with a fading trail behind it.
     /// `project` turns a direction into a point on the view, or nil when it's off the chart.
@@ -70,7 +72,14 @@ struct SkyOverlay {
             let ink = Color.white.opacity(inRange ? 1 : 0.4)
             // At popover size 80 craft turn into a pile, so the others are plain dots there.
             if compact, sat.id != best {
-                context.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)), with: .color(ink.opacity(0.75)))
+                if night {
+                    let g: CGFloat = 3
+                    context.fill(Path(ellipseIn: CGRect(x: p.x - g, y: p.y - g, width: g * 2, height: g * 2)),
+                                 with: .radialGradient(Gradient(colors: [.white.opacity(0.22), .white.opacity(0)]), center: p, startRadius: 0, endRadius: g))
+                    context.fill(Path(ellipseIn: CGRect(x: p.x - 0.9, y: p.y - 0.9, width: 1.8, height: 1.8)), with: .color(.white.opacity(0.95)))
+                } else {
+                    context.fill(Path(ellipseIn: CGRect(x: p.x - 1.6, y: p.y - 1.6, width: 3.2, height: 3.2)), with: .color(ink.opacity(0.75)))
+                }
                 continue
             }
             var heading: CGFloat = -.pi / 4

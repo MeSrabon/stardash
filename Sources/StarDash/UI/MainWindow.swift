@@ -341,7 +341,7 @@ struct DashboardPane: View {
                     Text(obstructed ? "Obstructed" : "Clear").font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(obstructed ? Palette.bad : Palette.good)
                 }
-                RadarDots(map: store.map, alignment: dish?.alignment, compact: true, sky: sky)
+                RadarDots(map: store.map, alignment: dish?.alignment, compact: true, sky: sky, night: true)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .overlay { CompactSatelliteHover(sky: sky, maxTheta: store.map?.maxTheta ?? 80) }
                 Text(inRange > 0 ? "\(inRange) satellites in range" : mapped)

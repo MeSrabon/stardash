@@ -279,6 +279,8 @@ struct RadarDots: View {
     /// Small version for the dashboard: no labels, tighter margin.
     var compact = false
     var sky = SkyOverlay()
+    /// Draws the chart as a night sky: stars, the Milky Way and a glow at the horizon, like the 3D view.
+    var night = false
 
     var body: some View {
         Canvas { context, size in
@@ -289,8 +291,12 @@ struct RadarDots: View {
 
             func ring(_ r: CGFloat) -> Path { Path(ellipseIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)) }
 
-            context.fill(ring(radius), with: .radialGradient(
-                Gradient(colors: [Palette.accent.opacity(0.10), .white.opacity(0.02)]), center: c, startRadius: 0, endRadius: radius))
+            if night {
+                Self.drawNight(in: &context, center: c, radius: radius)
+            } else {
+                context.fill(ring(radius), with: .radialGradient(
+                    Gradient(colors: [Palette.accent.opacity(0.10), .white.opacity(0.02)]), center: c, startRadius: 0, endRadius: radius))
+            }
 
             if let map {
                 let cell = side / CGFloat(map.cols)
@@ -303,8 +309,15 @@ struct RadarDots: View {
                         let y = c.y - radius + (CGFloat(row) + 0.5) * cell
                         let blocked = v < 0.5
                         let d = blocked ? dot * 1.25 : dot
+                        if night, blocked {
+                            let g = d * 2.2
+                            context.fill(Path(ellipseIn: CGRect(x: x - g, y: y - g, width: g * 2, height: g * 2)),
+                                         with: .radialGradient(Gradient(colors: [Palette.bad.opacity(0.35), Palette.bad.opacity(0)]),
+                                                               center: CGPoint(x: x, y: y), startRadius: 0, endRadius: g))
+                        }
+                        // At night the clear sky is a faint veil, so the stars show through.
                         context.fill(Path(ellipseIn: CGRect(x: x - d / 2, y: y - d / 2, width: d, height: d)),
-                                     with: .color(blocked ? Palette.bad : Palette.accent.opacity(0.55)))
+                                     with: .color(blocked ? Palette.bad : Palette.accent.opacity(night ? 0.1 : 0.55)))
                     }
                 }
             }
@@ -333,6 +346,8 @@ struct RadarDots: View {
                              at: CGPoint(x: c.x + sin(a) * (radius + 17), y: c.y - cos(a) * (radius + 17)))
             }
 
+            var sky = sky
+            sky.night = night
             sky.draw(in: &context, compact: compact, width: size.width) { azimuth, elevation in
                 let f = (90 - elevation) / maxTheta
                 guard f <= 1 else { return nil }
@@ -342,6 +357,39 @@ struct RadarDots: View {
 
             context.fill(Path(ellipseIn: CGRect(x: c.x - 2, y: c.y - 2, width: 4, height: 4)), with: .color(.white.opacity(0.7)))
         }
+    }
+
+    /// Deep blue at the zenith fading to black, a band of Milky Way, seeded stars and a cool glow on the horizon ring.
+    static func drawNight(in context: inout GraphicsContext, center c: CGPoint, radius: CGFloat) {
+        let disc = Path(ellipseIn: CGRect(x: c.x - radius, y: c.y - radius, width: radius * 2, height: radius * 2))
+        context.fill(disc, with: .radialGradient(
+            Gradient(stops: [.init(color: Color(red: 0.07, green: 0.09, blue: 0.16), location: 0),
+                             .init(color: Color(red: 0.03, green: 0.04, blue: 0.08), location: 0.7),
+                             .init(color: Color(red: 0.10, green: 0.14, blue: 0.24), location: 1)]),
+            center: c, startRadius: 0, endRadius: radius))
+        context.drawLayer { layer in
+            layer.clip(to: disc)
+            // The Milky Way: a soft, tilted band across the sky.
+            layer.translateBy(x: c.x, y: c.y)
+            layer.rotate(by: .degrees(-32))
+            let band = CGRect(x: -radius * 1.2, y: -radius * 0.26, width: radius * 2.4, height: radius * 0.52)
+            layer.fill(Path(ellipseIn: band), with: .radialGradient(
+                Gradient(colors: [Color(red: 0.75, green: 0.8, blue: 1).opacity(0.2), .clear]),
+                center: .zero, startRadius: 0, endRadius: radius * 0.9))
+            layer.rotate(by: .degrees(32))
+            layer.translateBy(x: -c.x, y: -c.y)
+            var rng = SeededRandom(seed: 7)
+            for _ in 0..<Int(radius * 3) {
+                let a = Double(rng.next()) * 2 * .pi
+                let r = sqrt(Double(rng.next())) * Double(radius)
+                let p = CGPoint(x: c.x + CGFloat(cos(a) * r), y: c.y + CGFloat(sin(a) * r))
+                let b = Double(rng.next())
+                let size = 0.5 + CGFloat(b * b) * 1.3
+                layer.fill(Path(ellipseIn: CGRect(x: p.x - size / 2, y: p.y - size / 2, width: size, height: size)),
+                           with: .color(Color(red: 0.85, green: 0.9, blue: 1).opacity(0.25 + b * 0.6)))
+            }
+        }
+        context.stroke(disc, with: .color(Color(red: 0.55, green: 0.65, blue: 1).opacity(0.28)), lineWidth: 2)
     }
 }
 

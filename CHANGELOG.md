@@ -9,9 +9,15 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 - A Today tile in the popover with data used since midnight, and the billing cycle total when signed in.
 - Quick actions in the popover: stow or unstow, restart the dish, and pause alerts for an hour.
 - Data today as a menu bar item.
+- Click the Latency, Today or Power tile in the popover to see its last 24 hours in place of the sky chart.
+- The popover lists the last few outages over 2 seconds from the past day, with a link to the rest.
+- Buttons in the popover footer open the Sky and Speed pages directly.
 
 ### Changed
 - The popover's Pings tile is gone, and so is Ping success in the menu bar. It sat at 100% nearly all the time.
+- The sky charts in the popover and on the dashboard are now a night sky, with stars, the Milky Way
+  and a glowing horizon. Satellites show as small lights and obstructions glow red.
+- Pause alerts in the popover is now Snooze 1 h.
 
 ### Fixed
 - Demo mode no longer shows the real dish location in Settings.
