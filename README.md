@@ -2,15 +2,16 @@
 
 # StarDash
 
-A native macOS monitor for Starlink. It lives in the menu bar and talks to your dish and router
-over the local network. Everything works without a Starlink account. Signing in is optional and
+A native macOS monitor for Starlink, with a full dashboard window and live numbers in the menu bar.
+It talks to your dish and router over the local network. Everything works without a Starlink account. Signing in is optional and
 adds the features that only exist in the cloud, like billing usage and router settings.
 
 ![Dashboard](docs/screenshots/dashboard.png)
 
 ## What it shows
 
-- Live throughput, latency, packet loss and power draw in the menu bar, with a one-screen popover.
+- Live throughput, latency, packet loss and power draw in the menu bar. The popover shows the last hour,
+  recent outages and 24-hour charts, with quick actions to stow, restart or snooze alerts.
 - The dish's obstruction map as a flat chart, a horizon view and a 3D dome, with a time-lapse of how it filled in.
 - The Starlink satellites overhead right now, computed from public orbit data, and the one the dish is most likely using.
   The 3D view puts the dish under a night sky and links it to that satellite.

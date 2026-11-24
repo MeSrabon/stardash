@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StarDash · Starlink monitor for macOS</title>
-<meta name="description" content="A free, open-source macOS menu bar app for your Starlink dish. Live speed, latency, outages, the obstruction map and the satellites overhead, read straight from your dish over the local network.">
+<meta name="description" content="A free, open-source Starlink monitor for macOS: a full dashboard window, with live numbers in the menu bar. Speed, latency, outages, the obstruction map and the satellites overhead, read straight from your dish over the local network.">
 <meta name="theme-color" content="#000000">
 <link rel="canonical" href="https://stardash.nixify.app/">
 <link rel="icon" href="/icon.svg" type="image/svg+xml">
@@ -12,22 +12,22 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="StarDash">
 <meta property="og:title" content="StarDash · Starlink monitor for macOS">
-<meta property="og:description" content="Your Starlink dish, in your menu bar. Free and open source for macOS.">
+<meta property="og:description" content="Your Starlink dish, on your Mac. A free, open-source dashboard with live numbers in the menu bar.">
 <meta property="og:image" content="https://stardash.nixify.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="StarDash: live Starlink stats in the macOS menu bar">
+<meta property="og:image:alt" content="StarDash: a Starlink dashboard for macOS">
 <meta property="og:url" content="https://stardash.nixify.app/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="StarDash · Starlink monitor for macOS">
-<meta name="twitter:description" content="Your Starlink dish, in your menu bar. Free and open source for macOS.">
+<meta name="twitter:description" content="Your Starlink dish, on your Mac. A free, open-source dashboard with live numbers in the menu bar.">
 <meta name="twitter:image" content="https://stardash.nixify.app/og.png">
 <script type="application/ld+json">
 {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   "name": "StarDash",
-  "description": "A free, open-source macOS menu bar app for Starlink. It reads live speed, latency, outages, power draw and the obstruction map straight from the dish over the local network, and shows the Starlink satellites overhead.",
+  "description": "A free, open-source Starlink monitor for macOS, with a full dashboard window and live numbers in the menu bar. It reads live speed, latency, outages, power draw and the obstruction map straight from the dish over the local network, and shows the Starlink satellites overhead.",
   "url": "https://stardash.nixify.app/",
   "downloadUrl": "https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg",
   "applicationCategory": "UtilitiesApplication",
@@ -228,8 +228,8 @@
 <main>
   <div class="wrap hero">
     <img class="icon" src="/icon.svg" alt="StarDash icon" width="84" height="84">
-    <h1>Your Starlink dish, in&nbsp;your menu bar.</h1>
-    <p class="lede">A native macOS app that reads your dish and router over the local network. Speed, latency, outages, the obstruction map and the satellites overhead, live.</p>
+    <h1>Your Starlink dish, on&nbsp;your&nbsp;Mac.</h1>
+    <p class="lede">A native macOS app that reads your dish and router over the local network. Open the dashboard for the sky, outages, devices and speed tests. Glance at the menu bar for the live numbers.</p>
     <div class="ctas">
       <a class="btn primary dl" href="https://github.com/sarequl/stardash/releases/latest/download/StarDash.dmg">
         <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.37 12.6c-.02-2.3 1.88-3.4 1.96-3.46-1.07-1.56-2.73-1.78-3.32-1.8-1.41-.14-2.76.83-3.48.83-.72 0-1.82-.81-3-.79-1.54.02-2.96.9-3.75 2.27-1.6 2.78-.41 6.89 1.15 9.14.76 1.1 1.67 2.34 2.86 2.3 1.15-.05 1.58-.74 2.97-.74 1.38 0 1.77.74 2.98.72 1.23-.02 2.01-1.12 2.77-2.23.87-1.28 1.23-2.52 1.25-2.58-.03-.01-2.4-.92-2.42-3.66zM14.1 5.86c.63-.77 1.06-1.83.94-2.9-.91.04-2.02.61-2.67 1.37-.58.67-1.1 1.76-.96 2.8 1.02.08 2.06-.52 2.69-1.27z"/></svg>
@@ -256,7 +256,7 @@
         <div class="caps">Menu bar</div>
         <div class="head" style="margin-bottom:0">
           <h2>Everything at a glance. Nothing in the way.</h2>
-          <p>Pick what sits next to the clock: latency, throughput, power draw, obstruction, outages or a latency sparkline. Click for the full picture.</p>
+          <p>Pick what sits next to the clock: latency, throughput, data used today, power draw, obstruction, outages or a latency sparkline. Click it for the last hour without opening the window.</p>
         </div>
         <div class="menubar" aria-label="Example menu bar readout">
           <span class="dot"></span><img src="/glyph.svg" alt=""><span>18 ms</span>
@@ -265,10 +265,10 @@
         <ul class="ticks">
           <li><b>Live numbers</b>, refreshed every second while you're looking.</li>
           <li><b>Outage alerts</b> when the link drops and again when it's back, with short blips filtered out.</li>
-          <li><b>A health score</b> that sums up the last few minutes in one number.</li>
+          <li><b>Tap a tile</b> for its last 24 hours, or check the most recent outages.</li>
         </ul>
       </div>
-      <img class="popover reveal" src="/img/popover.jpg" width="380" height="540" alt="The StarDash popover with download and upload speed, latency, pings, power and a small sky chart." loading="lazy">
+      <img class="popover reveal" src="/img/popover.jpg" width="380" height="660" alt="The StarDash popover with live speed, the last hour of latency and outages, today's data, power and a night-sky chart." loading="lazy">
     </div>
   </section>
 

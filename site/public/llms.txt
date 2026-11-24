@@ -1,13 +1,13 @@
 # StarDash
 
-> StarDash is a free, open-source (MIT) macOS menu bar app for Starlink. It reads live stats straight from the dish and router over the local network, with no account needed.
+> StarDash is a free, open-source (MIT) Starlink monitor for macOS, with a full dashboard window and live numbers in the menu bar. It reads live stats straight from the dish and router over the local network, with no account needed.
 
 StarDash runs on macOS 14 or later, on a Mac connected to a Starlink network. It talks to the dish at 192.168.100.1 and the Starlink router at 192.168.1.1 using the same local interface the Starlink app uses.
 
 What it shows:
 
 - Download and upload speed, latency, packet loss and power draw, in the menu bar and a popover.
-- The last hour of latency and outages, plus data used today.
+- The last hour of latency and outages, recent outages, data used today, and 24-hour charts in the popover.
 - The dish's obstruction map as a flat chart, a horizon view and a 3D night-sky dome with a time-lapse.
 - Starlink satellites overhead, computed from public orbit data (CelesTrak), with the one the dish is most likely using highlighted.
 - Outage and event history, kept between launches.
