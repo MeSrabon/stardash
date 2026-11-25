@@ -4,6 +4,8 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-26
+
 ### Added
 - StarDash updates itself. It checks GitHub once a day, shows a new version in the popover and
   in Settings › Updates with its notes, and installs and reopens in a few seconds. Updates are signed,
@@ -91,7 +93,8 @@ First release.
 - Dish controls: snow melt, sleep schedule, update time, map reset, stow and reboot.
 - Demo mode for screenshots that hides identifying details.
 
-[Unreleased]: https://github.com/sarequl/stardash/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/sarequl/stardash/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/sarequl/stardash/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/sarequl/stardash/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/sarequl/stardash/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/sarequl/stardash/compare/v0.1.2...v0.2.0
