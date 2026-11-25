@@ -81,7 +81,7 @@ struct SpeedPane: View {
 
     private var stageColor: Color {
         switch test.stage {
-        case .latency: return Palette.good
+        case .latency, .finding: return Palette.good
         case .routerUp, .macUp: return Palette.up
         default: return Palette.down
         }
@@ -100,6 +100,7 @@ struct SpeedPane: View {
                 Spacer(minLength: 8)
                 gauge.frame(maxWidth: 380, maxHeight: 380)
                 trace.frame(height: 46).frame(maxWidth: 380).padding(.top, -6)
+                SpeedServerControl().padding(.top, 2)
                 Spacer(minLength: 12)
                 TestRoute(result: shown)
                     .frame(maxWidth: 640)
@@ -176,7 +177,10 @@ struct SpeedPane: View {
 
     private var liveReadout: some View {
         VStack(spacing: 2) {
-            if test.stage == .latency {
+            if test.stage == .finding {
+                Text("···").font(Theme.display(68))
+                Text("ms").font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0))
+            } else if test.stage == .latency {
                 Text(test.current.latency.map { String(format: "%.0f", $0) } ?? "···")
                     .font(Theme.display(68)).monospacedDigit()
                 Text("ms").font(.system(size: 15, weight: .medium)).foregroundStyle(.white.opacity(0.5))
@@ -188,7 +192,7 @@ struct SpeedPane: View {
             HStack(spacing: 6) {
                 Image(systemName: test.stage.isUpload ? "arrow.up" : "arrow.down")
                     .font(.system(size: 10, weight: .bold))
-                    .opacity(test.stage == .latency ? 0 : 1)
+                    .opacity(test.stage == .latency || test.stage == .finding ? 0 : 1)
                 Text(test.stage.title.uppercased()).font(.system(size: 10.5, weight: .semibold)).kerning(1.2)
             }
             .foregroundStyle(stageColor)
@@ -280,6 +284,7 @@ struct SpeedPane: View {
         if let loss = shown?.loss {
             parts.append(loss <= 0 ? "no packet loss" : String(format: "%.0f%% packet loss", max(1, loss * 100)))
         }
+        if !test.isRunning, let server = shown?.server { parts.append("via \(server)") }
         return parts.joined(separator: " · ")
     }
 
@@ -382,6 +387,12 @@ struct SpeedPane: View {
                 Text(run.latency.map { String(format: "%.0f ms", $0) } ?? "")
                     .font(.system(size: 10.5)).monospacedDigit().foregroundStyle(.white.opacity(0.45))
             }
+            if let server = run.server, run.macDown != nil || run.macUp != nil {
+                Text(server)
+                    .font(.system(size: 10.5)).foregroundStyle(.white.opacity(0.4))
+                    .lineLimit(1).truncationMode(.tail)
+                    .padding(.top, -3)
+            }
             if run.macDown != nil || run.macUp != nil {
                 historyLine("laptopcomputer", "This Mac", run.macDown, run.macUp, strong: true)
             }
@@ -438,7 +449,7 @@ struct TestRoute: View {
         let on = test.includeRouter && found
         let macOn = test.includeMac || !on
         let state = RouteState(
-            macLive: stage == .latency || stage == .macDown || stage == .macUp,
+            macLive: stage == .finding || stage == .latency || stage == .macDown || stage == .macUp,
             routerLive: stage == .routerDown || stage == .routerUp,
             found: found, on: on, running: test.isRunning,
             color: stage.isUpload ? Palette.up : Palette.down,

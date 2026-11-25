@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         store.notifier.requestAuthorization()
         store.start()
         RulesEngine.shared.start(store: store)
+        AppUpdater.shared.start()
         render()
         if Driver.directory != nil {
             showWindow()
@@ -145,6 +146,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
         add("Open StarDash", #selector(menuOpen))
         add(speedTest.isRunning ? "Speed Test Running…" : "Run Speed Test", #selector(menuSpeedTest))
         add("Settings…", #selector(menuSettings), key: ",")
+        if AppUpdater.shared.isAvailable { add("Check for Updates…", #selector(menuCheckUpdates)) }
         menu.addItem(.separator())
         add("Quit StarDash", #selector(menuQuit), key: "q")
         statusItem.menu = menu
@@ -154,6 +156,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate, NSW
 
     @objc private func menuOpen() { showWindow() }
     @objc private func menuSettings() { openSettings() }
+    /// Checks, then shows the result in Settings, where the update panel lives.
+    @objc func menuCheckUpdates() {
+        AppUpdater.shared.check()
+        openSettings()
+    }
     @objc private func menuQuit() { NSApp.terminate(nil) }
     @objc private func menuSpeedTest() {
         guard !speedTest.isRunning else { return }
@@ -205,6 +212,9 @@ extension AppDelegate {
         let settings = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
         settings.target = self
         app.addItem(settings)
+        let updates = NSMenuItem(title: "Check for Updates…", action: #selector(menuCheckUpdates), keyEquivalent: "")
+        updates.target = self
+        app.addItem(updates)
         app.addItem(.separator())
         app.addItem(NSMenuItem(title: "Hide StarDash", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h"))
         app.addItem(NSMenuItem(title: "Quit StarDash", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))

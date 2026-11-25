@@ -41,7 +41,12 @@ struct PopoverRoot: View {
                 }
             }
             .frame(height: 148)
-            speedRow
+            // A waiting update takes the speed test's place, so the popover keeps its size.
+            if AppUpdater.shared.hasUpdate {
+                PopoverUpdateRow { actions.openSettings() }
+            } else {
+                speedRow
+            }
             quickActions(dish)
             Spacer(minLength: 0)
             footer

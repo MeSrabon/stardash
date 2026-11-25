@@ -6,15 +6,21 @@ private final class ByteCounter: NSObject, URLSessionDataDelegate, @unchecked Se
     private var _received: Int64 = 0
     private var _sent: Int64 = 0
     private var _refusedFor: Double?
+    private var _failedStatus: Int?
 
     /// Set when the server answered 429: how long it asked us to wait, in seconds (0 if it didn't say).
     var refusedFor: Double? { lock.lock(); defer { lock.unlock() }; return _refusedFor }
+    /// Set when the server answered with some other error, so an error page isn't counted as speed.
+    var failedStatus: Int? { lock.lock(); defer { lock.unlock() }; return _failedStatus }
 
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
                     completionHandler: @escaping (URLSession.ResponseDisposition) -> Void) {
         if let http = response as? HTTPURLResponse, http.statusCode == 429 {
             let wait = http.value(forHTTPHeaderField: "Retry-After").flatMap(Double.init) ?? 0
             lock.lock(); _refusedFor = wait; lock.unlock()
+            completionHandler(.cancel)
+        } else if let http = response as? HTTPURLResponse, http.statusCode >= 400 {
+            lock.lock(); _failedStatus = http.statusCode; lock.unlock()
             completionHandler(.cancel)
         } else {
             completionHandler(.allow)
@@ -47,6 +53,8 @@ struct SpeedResult: Codable, Identifiable {
     var loss: Double?
     var dishPeakDown: Double?
     var dishPeakUp: Double?
+    /// Which server the test from this Mac ran against, such as "Cloudflare" or "Pacific Internet (S) · Singapore".
+    var server: String?
 
     /// The headline number: what this Mac got, or the router's figure when the Mac test failed.
     var bestDown: Double? { macDown ?? routerDown }
@@ -54,16 +62,17 @@ struct SpeedResult: Codable, Identifiable {
 }
 
 /// Two tests side by side: the router's own test (router to internet) and one from this Mac
-/// (Mac to Cloudflare). The gap between them is your Wi-Fi.
+/// (Mac to Cloudflare, or the Ookla server picked on the Speed page). The gap between them is your Wi-Fi.
 @MainActor
 @Observable
 final class SpeedTest {
     enum Stage: Equatable {
-        case idle, latency, routerDown, routerUp, macDown, macUp
+        case idle, finding, latency, routerDown, routerUp, macDown, macUp
 
         var title: String {
             switch self {
             case .idle: return "Ready"
+            case .finding: return "Finding a server"
             case .latency: return "Measuring latency"
             case .routerDown: return "Router download"
             case .routerUp: return "Router upload"
@@ -135,6 +144,8 @@ final class SpeedTest {
             history.insert(current, at: 0)
             history = Array(history.prefix(200))
             save()
+            // The router figure still counts, but say why this Mac's part is missing.
+            if notice == nil, let problem = problems.first { notice = problem }
         } else {
             error = problems.first ?? "Speed test failed"
         }
@@ -201,27 +212,59 @@ final class SpeedTest {
 
     // MARK: This Mac
 
-    private func runMac(startProgress: Double) async -> String? {
-        let base = "https://speed.cloudflare.com"
-        let config = URLSessionConfiguration.ephemeral
-        config.timeoutIntervalForRequest = 15
-        let span = 1 - startProgress
+    private enum Target {
+        case cloudflare
+        case ookla(SpeedServer)
+    }
 
+    private func runMac(startProgress: Double) async -> String? {
+        let span = 1 - startProgress
+        var target = Target.cloudflare
+        // Demo stand-ins aren't real hosts, so demo runs measure against Cloudflare under the stand-in's name.
+        switch Settings.shared.speedServer {
+        case .cloudflare:
+            current.server = "Cloudflare"
+        case .ookla(let server):
+            current.server = server.label
+            if !Demo.on { target = .ookla(server) }
+        case .auto:
+            if Demo.on {
+                current.server = Ookla.demo[0].label
+            } else {
+                begin(.finding)
+                do {
+                    let server = try await Ookla.nearest()
+                    current.server = server.label
+                    target = .ookla(server)
+                } catch {
+                    return "Couldn't find a nearby Ookla server: \(error.localizedDescription). Try again, or pick Cloudflare or a server by hand."
+                }
+            }
+        }
+        switch target {
+        case .cloudflare: return await runCloudflare(startProgress: startProgress, span: span)
+        case .ookla(let server): return await runOokla(server, startProgress: startProgress, span: span)
+        }
+    }
+
+    /// Times a few small requests while real pings run alongside. Returns false if none of the requests answered.
+    private func measureLatency(config: URLSessionConfiguration, startProgress: Double, span: Double,
+                                url: () -> URL?) async -> Bool {
         begin(.latency)
         // Real pings run alongside the HTTP round trips: they give packet loss, and a truer latency.
         let pinging = Task.detached(priority: .userInitiated) { Pinger.run() }
         let plain = URLSession(configuration: config)
         var pings: [Double] = []
         for _ in 0..<8 {
-            guard let url = URL(string: "\(base)/__down?bytes=0") else { break }
+            guard let url = url() else { break }
             let t0 = Date()
-            if (try? await plain.data(from: url)) != nil {
+            if let (_, response) = try? await plain.data(from: url), ((response as? HTTPURLResponse)?.statusCode ?? 200) < 400 {
                 pings.append(Date().timeIntervalSince(t0) * 1000)
             }
         }
         plain.invalidateAndCancel()
         let icmp = await pinging.value
-        guard !pings.isEmpty else { return "Couldn't reach the speed test server" }
+        guard !pings.isEmpty else { return false }
         // The first request pays for the TLS handshake, so it's left out.
         let warm = pings.count > 1 ? Array(pings.dropFirst()) : pings
         current.latency = warm.min()
@@ -236,6 +279,26 @@ final class SpeedTest {
             }
         }
         progress = startProgress + span * 0.08
+        return true
+    }
+
+    /// Holds the download figure for a beat, then drops to zero, so the switch to upload is plain to see.
+    private func pauseBeforeUpload() async {
+        if let down = current.macDown { liveMbps = down }
+        try? await Task.sleep(for: .milliseconds(900))
+        begin(.macUp)
+        try? await Task.sleep(for: .milliseconds(450))
+    }
+
+    private func runCloudflare(startProgress: Double, span: Double) async -> String? {
+        let base = "https://speed.cloudflare.com"
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 15
+
+        guard await measureLatency(config: config, startProgress: startProgress, span: span,
+                                   url: { URL(string: "\(base)/__down?bytes=0") }) else {
+            return "Couldn't reach the speed test server"
+        }
 
         begin(.macDown)
         let downCounter = ByteCounter()
@@ -260,15 +323,12 @@ final class SpeedTest {
             current.macDown = await measure(seconds: 7, from: startProgress + span * 0.08, to: startProgress + span * 0.58) { backupCounter.received }
             backup.invalidateAndCancel()
             notice = current.macDown == nil
-                ? "The download test from this Mac couldn't run: the main test server is limiting this connection and the backup didn't answer."
-                : "Download from this Mac was measured against a backup server, because the main one is limiting this connection after several runs. It can read a little lower than usual."
+                ? "The download test from this Mac couldn't run: Cloudflare is limiting this connection and the backup didn't answer. Try an Ookla server instead."
+                : "Download from this Mac was measured against a backup server, because Cloudflare is limiting this connection after several runs. It can read a little lower than usual."
+            if current.macDown != nil { current.server = "Hetzner (backup)" }
         }
 
-        // Hold the download figure for a beat, then drop to zero, so the switch to upload is plain to see.
-        if let down = current.macDown { liveMbps = down }
-        try? await Task.sleep(for: .milliseconds(900))
-        begin(.macUp)
-        try? await Task.sleep(for: .milliseconds(450))
+        await pauseBeforeUpload()
         let upCounter = ByteCounter()
         let upSession = URLSession(configuration: config, delegate: upCounter, delegateQueue: nil)
         if let url = URL(string: "\(base)/__up") {
@@ -279,6 +339,53 @@ final class SpeedTest {
         }
         current.macUp = await measure(seconds: 6, from: startProgress + span * 0.58, to: 1) { upCounter.sent }
         upSession.invalidateAndCancel()
+        return nil
+    }
+
+    /// The speedtest.net protocol: latency.txt for round trips, the random JPEGs for download, upload.php for upload.
+    /// Request counts are capped so a run stays near Cloudflare's, roughly 100 to 300 MB.
+    private func runOokla(_ server: SpeedServer, startProgress: Double, span: Double) async -> String? {
+        let tryAnother = "Pick another server on the Speed page."
+        func bust() -> String { String(UInt32.random(in: 0...UInt32.max)) }
+
+        guard await measureLatency(config: Ookla.config(), startProgress: startProgress, span: span,
+                                   url: { URL(string: "\(server.base)/latency.txt?r=\(bust())") }) else {
+            return "Couldn't reach \(server.label). It may be down or busy. \(tryAnother)"
+        }
+
+        begin(.macDown)
+        let downCounter = ByteCounter()
+        let downSession = URLSession(configuration: Ookla.config(connections: 6), delegate: downCounter, delegateQueue: nil)
+        // Each file is about 31 MB. Six run at once and the rest wait their turn, so the cap is about 310 MB.
+        for _ in 0..<10 {
+            if let url = URL(string: "\(server.base)/random4000x4000.jpg?r=\(bust())") { downSession.dataTask(with: url).resume() }
+        }
+        current.macDown = await measure(seconds: 7, from: startProgress + span * 0.08, to: startProgress + span * 0.58,
+                                        stop: { downCounter.failedStatus != nil || downCounter.refusedFor != nil }) { downCounter.received }
+        downSession.invalidateAndCancel()
+        if current.macDown == nil {
+            let status = downCounter.failedStatus.map { " (it answered with error \($0))" } ?? ""
+            return "\(server.label) didn't send any test data\(status). \(tryAnother)"
+        }
+
+        await pauseBeforeUpload()
+        let upCounter = ByteCounter()
+        let upSession = URLSession(configuration: Ookla.config(connections: 3), delegate: upCounter, delegateQueue: nil)
+        if let url = URL(string: "\(server.base)/upload.php?r=\(bust())") {
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+            // Random bytes, so nothing along the way can squeeze them. 12 posts of 6 MB, three at a time.
+            var payload = Data(count: 6_000_000)
+            payload.withUnsafeMutableBytes { arc4random_buf($0.baseAddress, $0.count) }
+            for _ in 0..<12 { upSession.uploadTask(with: request, from: payload).resume() }
+        }
+        current.macUp = await measure(seconds: 6, from: startProgress + span * 0.58, to: 1,
+                                      stop: { upCounter.failedStatus != nil }) { upCounter.sent }
+        upSession.invalidateAndCancel()
+        if current.macUp == nil {
+            notice = "Upload to \(server.label) didn't go through\(upCounter.failedStatus.map { " (error \($0))" } ?? ""). \(tryAnother)"
+        }
         return nil
     }
 

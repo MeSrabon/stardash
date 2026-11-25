@@ -44,6 +44,8 @@ final class Settings {
     /// Notifications stay quiet until this time, for when you know the link will be rough.
     var alertsPausedUntil: Date? { didSet { d.set(alertsPausedUntil?.timeIntervalSince1970, forKey: "alertsPausedUntil") } }
     var alertsPaused: Bool { (alertsPausedUntil ?? .distantPast) > Date() }
+    /// What the speed test from this Mac runs against.
+    var speedServer: SpeedServerChoice = SpeedServerChoice.saved { didSet { SpeedServerChoice.save(speedServer) } }
 
     func setSite(latitude: Double, longitude: Double) {
         guard (-90...90).contains(latitude), (-180...180).contains(longitude) else { return }

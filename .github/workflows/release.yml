@@ -80,21 +80,44 @@ jobs:
           xcrun stapler staple "dist/StarDash-$VERSION.dmg"
           spctl --assess --type open --context context:primary-signature -v "dist/StarDash-$VERSION.dmg"
 
+      - name: Release notes
+        run: |
+          # The release notes are this version's section of CHANGELOG.md.
+          awk -v v="$VERSION" '/^## \[/ { on = index($0, "[" v "]") > 0; next } /^\[[^]]*\]: / { on = 0 } on' CHANGELOG.md > dist/changes.md
+          [ -s dist/changes.md ] || { echo "CHANGELOG.md has no section for $VERSION" >&2; exit 1; }
+
+      - name: Update feed
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # The appcast tells installed copies about this release. Sparkle checks the EdDSA signature,
+          # so without the key there is no feed and installed copies simply see no update.
+          if [ -z "$SPARKLE_KEY" ]; then
+            echo "::warning::SPARKLE_PRIVATE_KEY is not set, so this release has no update feed."
+            exit 0
+          fi
+          printf '%s' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle.key"
+          ./scripts/appcast.sh "$VERSION" "dist/StarDash-$VERSION.dmg" \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/StarDash-$VERSION.dmg" \
+            dist/changes.md "$RUNNER_TEMP/sparkle.key"
+          rm "$RUNNER_TEMP/sparkle.key"
+
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           cd dist
           shasum -a 256 "StarDash-$VERSION.dmg" > "StarDash-$VERSION.dmg.sha256"
-          # The release notes are this version's section of CHANGELOG.md.
-          awk -v v="$VERSION" '/^## \[/ { on = index($0, "[" v "]") > 0; next } /^\[[^]]*\]: / { on = 0 } on' ../CHANGELOG.md > notes.md
+          cp changes.md notes.md
           if [ "$SIGNED" != "true" ]; then
             echo "" >> notes.md
             echo "> This build isn't notarized yet. If macOS won't open it, go to System Settings › Privacy & Security and click Open Anyway, or run: \`xattr -dr com.apple.quarantine /Applications/StarDash.app\`" >> notes.md
           fi
           # A copy with a fixed name, so releases/latest/download/StarDash.dmg always works.
           cp "StarDash-$VERSION.dmg" StarDash.dmg
-          gh release create "$GITHUB_REF_NAME" "StarDash-$VERSION.dmg" "StarDash-$VERSION.dmg.sha256" StarDash.dmg \
+          ASSETS=("StarDash-$VERSION.dmg" "StarDash-$VERSION.dmg.sha256" StarDash.dmg)
+          [ -f appcast.xml ] && ASSETS+=(appcast.xml)
+          gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
             --title "StarDash $VERSION" --notes-file notes.md --verify-tag
 
       - name: Remove the signing keychain

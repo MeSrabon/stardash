@@ -4,6 +4,13 @@ Notable changes to StarDash. Versions follow [Semantic Versioning](https://semve
 
 ## [Unreleased]
 
+### Added
+- StarDash updates itself. It checks GitHub once a day, shows a new version in the popover and
+  in Settings › Updates with its notes, and installs and reopens in a few seconds. Updates are signed,
+  and the app refuses one that doesn't match the signature. Turn off the daily check in Settings.
+- Pick the speed test server: Cloudflare as before, the nearest Ookla server, or any Ookla server
+  by city or provider. Each result shows which server it used.
+
 ## [0.4.0] - 2026-11-26
 
 ### Added

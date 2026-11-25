@@ -350,7 +350,8 @@ enum Snapshot {
         if arguments.contains("--route") {
             let saved = (speedTest.includeRouter, speedTest.includeMac, Settings.shared.themeName)
             let size = CGSize(width: 1080, height: 760)
-            speedTest.history.insert(SpeedResult(date: Date(), macDown: 142, macUp: 12.4, routerDown: 171, routerUp: 19.2, latency: 23, jitter: 1.8), at: 0)
+            speedTest.history.insert(SpeedResult(date: Date(), macDown: 142, macUp: 12.4, routerDown: 171, routerUp: 19.2, latency: 23, jitter: 1.8,
+                                                   server: Ookla.demo[0].label), at: 0)
             for theme in ["mono", "glass"] {
                 Settings.shared.themeName = theme
                 speedTest.includeRouter = false
@@ -372,6 +373,13 @@ enum Snapshot {
         await shoot("popover-latency", PopoverRoot(detail: .latency))
         await shoot("popover-data", PopoverRoot(detail: .data))
         await shoot("popover-power", PopoverRoot(detail: .power))
+        if arguments.contains("--update") {
+            // The update notice in the popover and Settings, with a made-up offer.
+            AppUpdater.shared.showDemoOffer()
+            await shoot("popover-update", PopoverRoot())
+            await shoot("window-settings-update", size: CGSize(width: 1080, height: 1300), MainWindow(pane: .settings))
+            AppUpdater.shared.later()
+        }
         await shoot("settings", PopoverRoot())
         for pane in [Pane.overview, .speed, .sky, .network, .device, .events, .settings] {
             await shoot("window-\(pane.rawValue)", size: CGSize(width: 1080, height: 760), MainWindow(pane: pane))
@@ -496,7 +504,8 @@ enum IconMaker {
 
 /// Drives the real window with scripted pointer events and saves pictures of it, so the live app
 /// can be checked without anyone at the mouse. Steps come from `--steps`, separated by semicolons:
-/// `pane:sky`, `wait:1.5`, `move:x,y`, `click:x,y`, `drag:x1,y1,x2,y2`, `scroll:x,y,dy`, `key:esc`, `snap:name`.
+/// `pane:sky`, `wait:1.5`, `move:x,y`, `click:x,y`, `drag:x1,y1,x2,y2`, `scroll:x,y,dy`, `key:esc`, `snap:name`,
+/// `servers` (opens the speed test server picker), `server:N` (picks the Nth Ookla demo server, 0 for Cloudflare).
 /// Coordinates are points from the top-left of the window's content.
 @MainActor
 enum Driver {
@@ -630,6 +639,13 @@ enum Driver {
                 let top = Double(window.contentView?.bounds.height ?? 760) - Double(target.y)
                 print("pointing at a bead at \(Int(target.x)),\(Int(top))")
                 await hover(Double(target.x), top)
+            case "servers":
+                SpeedServerPicker.open()
+                await pause(1.5)
+            case "server" where values.count == 1:
+                let n = Int(values[0])
+                Settings.shared.speedServer = n == 0 ? .cloudflare : n < 0 ? .auto : .ookla(Ookla.demo[min(n, Ookla.demo.count) - 1])
+                await pause(0.5)
             case "snap" where parts.count > 1:
                 snap(window, to: dir.appendingPathComponent("\(parts[1]).png"))
             default:

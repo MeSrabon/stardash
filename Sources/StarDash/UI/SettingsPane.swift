@@ -23,6 +23,7 @@ struct SettingsPane: View {
                 VStack(spacing: 14) {
                     connection(settings)
                     data
+                    UpdatesPanel()
                 }
             }
             footer

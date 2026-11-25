@@ -16,8 +16,13 @@ swift build -c release --arch arm64 --arch x86_64
 BIN="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/StarDash"
 
 rm -rf "$APP"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp "$BIN" "$APP/Contents/MacOS/StarDash"
+# Sparkle, for updates. ditto keeps the framework's symlinks intact.
+ditto "$(dirname "$BIN")/Sparkle.framework" "$APP/Contents/Frameworks/Sparkle.framework"
+# Sparkle's MIT license asks for its notice to travel with the app.
+SPARKLE_LICENSE="$(find .build/artifacts -path '*Sparkle/LICENSE' -type f | head -1)"
+[ -n "$SPARKLE_LICENSE" ] && cp "$SPARKLE_LICENSE" "$APP/Contents/Resources/Sparkle-LICENSE.txt"
 
 ICONSET="$(mktemp -d)/StarDash.iconset"
 mkdir -p "$ICONSET"
@@ -52,15 +57,29 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>NSLocationWhenInUseUsageDescription</key>
   <string>StarDash uses this Mac's location once, to work out which Starlink satellites are overhead. It stays on this Mac.</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+  <key>SUFeedURL</key><string>https://github.com/sarequl/stardash/releases/latest/download/appcast.xml</string>
+  <key>SUPublicEDKey</key><string>e+ORmtOzpSRxL/Z3Z+3X+DzvZ7d29+fkieBrWfx9GHc=</string>
+  <key>SUEnableAutomaticChecks</key><true/>
+  <key>SUScheduledCheckInterval</key><integer>86400</integer>
 </dict>
 </plist>
 PLIST
 
+# Sign Sparkle's helpers inside out, then the app, as Sparkle's docs describe.
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 if [ -n "${SIGN_IDENTITY:-}" ]; then
-  codesign --force --timestamp --options runtime \
-    --entitlements scripts/StarDash.entitlements \
-    --sign "$SIGN_IDENTITY" "$APP"
+  SIGN=(codesign --force --timestamp --options runtime --sign "$SIGN_IDENTITY")
 else
-  codesign --force --sign - "$APP"
+  SIGN=(codesign --force --sign -)
+fi
+"${SIGN[@]}" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
+"${SIGN[@]}" --preserve-metadata=entitlements "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
+"${SIGN[@]}" "$SPARKLE/Versions/B/Autoupdate"
+"${SIGN[@]}" "$SPARKLE/Versions/B/Updater.app"
+"${SIGN[@]}" "$SPARKLE"
+if [ -n "${SIGN_IDENTITY:-}" ]; then
+  "${SIGN[@]}" --entitlements scripts/StarDash.entitlements "$APP"
+else
+  "${SIGN[@]}" "$APP"
 fi
 echo "Built $APP ($(du -sh "$APP" | cut -f1))"
